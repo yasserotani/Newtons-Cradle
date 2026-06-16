@@ -1,50 +1,51 @@
 /**
  * @file motion.js
- * Handles the trigonometric calculations for pendulum swings.
+ * @description Handles pendulum swing math, integration, and damping.
  */
-
-import { balls, config } from "./state.js";
+import { pendulumBalls } from './state.js';
+import { PHYSICS, PENDULUM } from '../constants.js';
 
 /**
- * The main loop function. The integrator (main.js) will call this every frame.
- * @param {number} dt - Delta time (time elapsed since last frame).
+ * Updates the physical state of all balls based on time (dt).
  */
 export function updateAllPendulums(dt) {
-  // TODO: Loop through 'balls' array.
-  // For each ball:
-  // 1. Get angular acceleration.
-  // 2. Update velocity (velocity += acceleration * dt).
-  // 3. Apply damping to velocity.
-  // 4. Update angle (angle += velocity * dt).
-  // 5. Update Cartesian coordinates (x, y) based on the new angle.
+    pendulumBalls.forEach(ball => {
+        // 1. Calculate Acceleration
+        const acc = calculateAngularAcceleration(ball.angle, PENDULUM.DEFAULT_LENGTH);
+        
+        // 2. Update Velocity
+        ball.velocity += acc * dt;
+        ball.velocity = applyDamping(ball.velocity);
+        
+        // 3. Update Angle
+        ball.angle += ball.velocity * dt;
+        
+        // 4. Update Position
+        updateCartesianCoordinates(ball, PENDULUM.DEFAULT_LENGTH);
+    });
 }
 
 /**
- * Calculates how fast the angle is changing based on gravity.
- * @param {number} currentAngle
- * @returns {number} The angular acceleration.
+ * Calculates angular acceleration based on the pendulum angle.
  */
-export function calculateAngularAcceleration(currentAngle) {
-  // TODO: Apply the pendulum formula: -(gravity / stringLength) * Math.sin(currentAngle)
-  return 0; // Replace with actual math
+export function calculateAngularAcceleration(currentAngle, stringLength) {
+    // Formula: -(g / L) * sin(theta)
+    return -(PHYSICS.GRAVITY / stringLength) * Math.sin(currentAngle);
 }
 
 /**
- * Reduces velocity slightly to simulate air resistance.
- * @param {number} velocity
- * @returns {number} The damped velocity.
+ * Reduces velocity to simulate air resistance.
  */
 export function applyDamping(velocity) {
-  // TODO: Return velocity * config.damping
-  return velocity;
+    return velocity * PHYSICS.AIR_DAMPING;
 }
 
 /**
- * Converts the rotational angle into actual 2D screen coordinates.
- * @param {Object} ball - The ball object from the state array.
+ * Converts a ball's rotational angle into X/Y coordinates.
  */
-export function updateCartesianCoordinates(ball) {
-  // TODO: Calculate actual X and Y using trigonometry.
-  // ball.x = ball.pivotX + (config.stringLength * Math.sin(ball.angle))
-  // ball.y = ball.pivotY - (config.stringLength * Math.cos(ball.angle))
+export function updateCartesianCoordinates(ball, stringLength) {
+    // x = pivotX + L * sin(theta)
+    // y = pivotY - L * cos(theta)
+    ball.x = ball.pivotX + (stringLength * Math.sin(ball.angle));
+    ball.y = ball.pivotY - (stringLength * Math.cos(ball.angle));
 }

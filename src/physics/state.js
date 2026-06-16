@@ -1,34 +1,56 @@
 /**
  * @file state.js
- * Manages the shared data and initialization of the Newton's Cradle.
+ * @description Holds the physics state and initialization logic.
  */
+import { CRADLE } from "../constants.js";
 
-// Array to hold the 5 ball objects
-export const balls = [];
+export const pendulumBalls = [];
 
-// Global physics environment variables
-export const config = {
+export const environment = {
   gravity: 9.81,
-  stringLength: 10,
-  damping: 0.999, // Air resistance/friction multiplier
+  damping: 0.999,
 };
 
 /**
- * Populates the 'balls' array with initial data when the simulation starts.
- * @param {number} count - Total number of balls (e.g., 5).
- * @param {number} radius - The radius of each ball.
- * @param {number} startX - The starting X coordinate for the first ball.
+ * Initializes the physics array with ball objects.
  */
-export function initPhysicsSystem(count, radius, startX) {
-  // TODO: Create a loop to push ball objects into the 'balls' array.
-  // Each ball needs: id, radius, mass, x, y, angle, velocity, pivotX, pivotY.
-  // Tip: Space the pivotX of each ball by exactly (radius * 2) so they touch perfectly.
+export function initPhysicsSystem() {
+  pendulumBalls.length = 0; // Clear array
+  for (let i = 0; i < CRADLE.NUM_BALLS; i++) {
+    // Calculate X position so they are centered
+    const spacing = CRADLE.BALL_RADIUS * 2 + CRADLE.BALL_SPACING;
+    const xPos = (i - (CRADLE.NUM_BALLS - 1) / 2) * spacing;
+
+    pendulumBalls.push({
+      id: i,
+      x: xPos,
+      y: 0,
+      velocity: 0,
+      angle: 0,
+      radius: CRADLE.BALL_RADIUS,
+      mass: 1.0,
+      pivotX: xPos,
+      pivotY: 10,
+    });
+  }
 }
 
 /**
- * Instantly stops all movement and returns balls to a resting state.
- * Useful for a "Reset" button in the UI.
+ * Resets all balls to their default resting position and zero velocity.
  */
-export function resetVelocities() {
-  // TODO: Loop through the 'balls' array and set angle and velocity to 0.
+export function resetSystem() {
+  pendulumBalls.forEach((ball) => {
+    ball.angle = 0;
+    ball.velocity = 0;
+  });
+}
+
+/**
+ * Dynamically updates the mass of a ball.
+ */
+export function updateBallMass(ballId, newMass) {
+  const ball = pendulumBalls.find((b) => b.id === ballId);
+  if (ball) {
+    ball.mass = newMass;
+  }
 }
