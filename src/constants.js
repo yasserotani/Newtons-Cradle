@@ -10,12 +10,18 @@ export const COLLISION = {
   MIN_IMPULSE_FOR_SOUND: 0.05,
 };
 
-export const CRADLE = {
-  NUM_BALLS: 5,
-  BALL_RADIUS: 0.5,
-  BALL_SPACING: 0.4,
-  ROPE_STIFFNESS: 800.0,
-  ROPE_DAMPING: 0.5,
+export const CONFIG = {
+    ballCount: 4,
+    ballRadius: 0.4,
+    threadLength: 2.0,
+    supportHeight: 3.0,
+    spreadZ: 0.6,
+    cradleWidth: 3.2,
+    colors: {
+        ball: 0xffaa00,
+        thread: 0xcccccc,
+        support: 0x444466
+    }
 };
 
 // Added this missing section:
