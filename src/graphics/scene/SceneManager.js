@@ -1,46 +1,64 @@
 // src/graphics/scene/SceneManager.js
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export class SceneManager {
-    constructor() {
-        // 1. المشهد
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x1a1a2e); // خلفية داكنة أنيقة
+  constructor() {
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0f172a);
+    this.scene.fog = new THREE.Fog(0x0f172a, 6, 24);
 
-        // 2. الكاميرا (نظرتها على البندول من زاوية جميلة)
-        this.camera = new THREE.PerspectiveCamera(
-            45,                                      // مجال الرؤية
-            window.innerWidth / window.innerHeight,  // نسبة الأبعاد
-            0.1,                                     // أقرب مستوى قطع
-            100                                      // أبعد مستوى قطع
-        );
-        this.camera.position.set(6, 4, 8);           // مكان الكاميرا
-        this.camera.lookAt(0, 1.5, 0);               // تنظر إلى منتصف البندول تقريباً
+    this.camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100,
+    );
+    this.camera.position.set(6.2, 4.3, 7.5);
+    this.camera.lookAt(0, 1.4, 0);
 
-        // 3. العارض (Renderer)
-        this.renderer = new THREE.WebGLRenderer({ 
-            antialias: true                          // تنعيم الحواف
-        });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // أداء أفضل
-        this.renderer.shadowMap.enabled = true;      // تفعيل الظلال (مفيد لاحقاً)
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // ظلال ناعمة
-        document.body.appendChild(this.renderer.domElement);
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance",
+    });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.1;
 
-        // 4. استجابة تغيير حجم النافذة (ربطها بالكلاس نفسه)
-        this._handleResize = this._handleResize.bind(this);
-        window.addEventListener('resize', this._handleResize);
-    }
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(20, 20),
+      new THREE.MeshStandardMaterial({
+        color: 0x111827,
+        metalness: 0.1,
+        roughness: 0.95,
+      }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    this.scene.add(ground);
 
-    // دالة لتحديث الحجم
-    _handleResize() {
-        this.camera.aspect = window.innerWidth / window.innerHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    document.body.appendChild(this.renderer.domElement);
 
-    // دوال عامة لاسترجاع العناصر
-    getScene() { return this.scene; }
-    getCamera() { return this.camera; }
-    getRenderer() { return this.renderer; }
+    this._handleResize = this._handleResize.bind(this);
+    window.addEventListener("resize", this._handleResize);
+  }
+
+  _handleResize() {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  getScene() {
+    return this.scene;
+  }
+  getCamera() {
+    return this.camera;
+  }
+  getRenderer() {
+    return this.renderer;
+  }
 }
