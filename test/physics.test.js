@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PhysicsEngine } from "../src/physics/engine.js";
+import { PhysicsEngine } from "../src/physics/PhysicsEngine.js";
 
 test("physics engine returns positions for the configured ball count", () => {
   const config = {

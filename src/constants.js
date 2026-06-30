@@ -1,3 +1,5 @@
+// src/constants.js
+
 export const PHYSICS = {
   GRAVITY: 9.81,
   AIR_DAMPING: 0.998,
@@ -29,7 +31,21 @@ export const CONFIG = {
   },
 };
 
-// Added this missing section:
-export const PENDULUM = {
-  DEFAULT_LENGTH: 10, // This matches the pivot height (y=10) used in your state.js
+// CRADLE describes the resting layout — used by state.js to place balls.
+// Derived from CONFIG so there's only one source of truth for geometry.
+export const CRADLE = {
+  NUM_BALLS: CONFIG.ballCount,
+  BALL_RADIUS: CONFIG.ballRadius,
+  BALL_SPACING: 0.02, // small gap so resting balls just touch, not overlap
 };
+
+// PENDULUM.DEFAULT_LENGTH now mirrors CONFIG.threadLength instead of being
+// a separate hardcoded "10" — previously motion.js and state.js disagreed
+// on string length, which would have caused wrong swing speeds.
+export const PENDULUM = {
+  DEFAULT_LENGTH: CONFIG.threadLength,
+};
+
+export function computeCradleWidth(config) {
+  return config.cradleWidth ?? config.ballCount * config.ballRadius * 1.7;
+}

@@ -1,79 +1,152 @@
 import { GUI } from "lil-gui";
+import { Chart, registerables } from "chart.js";
+Chart.register(...registerables);
 
 export class UIManager {
-  constructor(onReset, onPauseToggle, onResetDefaults) {
+  constructor(onReset, onPauseToggle, onResetDefaults, dragController) { // Added dragController
     this.gui = new GUI();
     this.onReset = onReset;
     this.onPauseToggle = onPauseToggle;
     this.onResetDefaults = onResetDefaults;
+    this.dragController = dragController; // Store dragController
     this.panel = null;
     this.toggleButton = null;
     this.pauseButton = null;
     this.resetButton = null;
     this.visible = true;
-    this.graphValues = Array.from({ length: 40 }, () => 0);
     this.controllers = {};
+    this.chart = null;
+    this.historyLength = 60;
+    this.velocityHistory = Array(this.historyLength).fill(0);
+    this.momentumHistory = Array(this.historyLength).fill(0);
+    this.energyHistory = Array(this.historyLength).fill(0);
+    this._previousRestitution = 1.0; // Store previous restitution for toggling infinite motion
   }
 
   createControls(params) {
     this.controllers.gravity = this.gui
-      .add(params, "gravity", 1, 20, 0.01)
-      .onChange((value) => {
-        params.gravity = value;
-        this.onReset();
-      });
+        .add(params, "gravity", 1, 20, 0.01)
+        .onChange((value) => {
+          params.gravity = value;
+          this.onReset();
+        });
 
     this.controllers.restitution = this.gui
-      .add(params, "restitution", 0.1, 1.0, 0.01)
-      .onChange((value) => {
-        params.restitution = value;
-        this.onReset();
-      });
+        .add(params, "restitution", 0.1, 1.0, 0.01)
+        .onChange((value) => {
+          params.restitution = value;
+          // Only update _previousRestitution if infiniteMotion is NOT active
+          if (!params.infiniteMotion) {
+            this._previousRestitution = value;
+          }
+          this.onReset();
+        });
+
+    // New control for infinite motion
+    this.controllers.infiniteMotion = this.gui
+        .add(params, "infiniteMotion")
+        .name("Infinite Motion (No Damping)")
+        .onChange((value) => {
+          if (value) {
+            // Store current restitution before overriding
+            this._previousRestitution = params.restitution;
+            params.restitution = 1.0; // Force to 1.0 for infinite motion
+            this.controllers.restitution.setValue(1.0);
+            this.controllers.restitution.disable();
+          } else {
+            // Restore previous restitution
+            params.restitution = this._previousRestitution;
+            this.controllers.restitution.setValue(this._previousRestitution);
+            this.controllers.restitution.enable();
+          }
+          this.onReset();
+        });
+
+    // New control for drag enabled
+    this.controllers.dragEnabled = this.gui
+        .add(params, "dragEnabled")
+        .name("Enable Ball Drag")
+        .onChange((value) => {
+          this.dragController.setEnabled(value); // Toggle drag controller
+        });
+
 
     this.controllers.ballCount = this.gui
-      .add(params, "ballCount", 2, 8, 1)
-      .onChange((value) => {
-        params.ballCount = value;
-        this.onReset();
-      });
+        .add(params, "ballCount", {
+          "1   balls": 1,
+          "2 balls": 2,
+          "3 balls": 3,
+          "4 balls": 4,
+          "5 balls": 5,
+          "6 balls": 6,
+          "7 balls": 7,
+          "8 balls": 8,
+        })
+        .onChange((value) => {
+          params.ballCount = value;
+          this.onReset();
+        });
 
     this.controllers.ballRadius = this.gui
-      .add(params, "ballRadius", 0.2, 0.8, 0.01)
-      .onChange((value) => {
-        params.ballRadius = value;
-        this.onReset();
-      });
+        .add(params, "ballRadius", 0.2, 0.8, 0.01)
+        .onChange((value) => {
+          params.ballRadius = value;
+          this.onReset();
+        });
 
     this.controllers.mass = this.gui
-      .add(params, "mass", 0.5, 5, 0.1)
-      .onChange((value) => {
-        params.mass = value;
-        this.onReset();
-      });
+        .add(params, "mass", 0.5, 5, 0.1)
+        .onChange((value) => {
+          params.mass = value;
+          this.onReset();
+        });
 
     this.controllers.initialLaunchAngle = this.gui
-      .add(params, "initialLaunchAngle", -1.2, 0, 0.01)
-      .onChange((value) => {
-        params.initialLaunchAngle = value;
-        this.onReset();
-      });
+        .add(params, "initialLaunchAngle", -3, 0, 0.01)
+        .onChange((value) => {
+          params.initialLaunchAngle = value;
+          this.onReset();
+        });
 
     this.controllers.liftedBallCount = this.gui
-      .add(params, "liftedBallCount", 1, 4, 1)
-      .onChange((value) => {
-        params.liftedBallCount = value;
-        this.onReset();
-      });
+        .add(params, "liftedBallCount", 1, 4, 1)
+        .onChange((value) => {
+          params.liftedBallCount = value;
+          this.onReset();
+        });
 
     this.gui.add(params, "reset");
 
     this.createStatusPanel();
+
+    // Initial state check for infiniteMotion
+    if (params.infiniteMotion) {
+      this.controllers.restitution.disable();
+    }
+    // Initial state check for dragEnabled
+    this.dragController.setEnabled(params.dragEnabled);
   }
 
   setControllerValues(values) {
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
+        // Explicitly call onChange for all controllers to ensure the simulation updates
+        // This mimics a user manually changing each value.
+        this.controllers[key]._callOnChange(value);
+
+        // Special handling for restitution controller's enabled state
+        if (key === 'infiniteMotion') {
+          if (value) { // if infiniteMotion is true
+            this.controllers.restitution.disable();
+          } else { // if infiniteMotion is false
+            this.controllers.restitution.enable();
+          }
+        }
+        // Special handling for dragEnabled controller's state
+        if (key === 'dragEnabled') {
+          this.dragController.setEnabled(value);
+        }
       }
     });
   }
@@ -111,20 +184,24 @@ export class UIManager {
     title.textContent = "Physics Status";
     title.style.fontWeight = "700";
     titleRow.appendChild(title);
-
     this.panel.appendChild(titleRow);
 
     this.statusContent = document.createElement("div");
     this.panel.appendChild(this.statusContent);
 
+    const chartWrap = document.createElement("div");
+    chartWrap.style.position = "relative";
+    chartWrap.style.height = "110px";
+    chartWrap.style.marginTop = "10px";
+    chartWrap.style.borderRadius = "8px";
+    chartWrap.style.overflow = "hidden";
+    chartWrap.style.background = "rgba(15, 23, 42, 0.55)";
+
     this.graphCanvas = document.createElement("canvas");
-    this.graphCanvas.width = 270;
-    this.graphCanvas.height = 90;
-    this.graphCanvas.style.width = "100%";
-    this.graphCanvas.style.marginTop = "8px";
-    this.graphCanvas.style.borderRadius = "8px";
-    this.graphCanvas.style.background = "rgba(15, 23, 42, 0.55)";
-    this.panel.appendChild(this.graphCanvas);
+    chartWrap.appendChild(this.graphCanvas);
+    this.panel.appendChild(chartWrap);
+
+    this._initChart();
 
     document.body.appendChild(this.panelWrapper);
 
@@ -170,123 +247,159 @@ export class UIManager {
     this.panelWrapper.appendChild(this.panel);
   }
 
+  _initChart() {
+    const labels = Array.from({ length: this.historyLength }, (_, i) => i);
+
+    this.chart = new Chart(this.graphCanvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Velocity",
+            data: [...this.velocityHistory],
+            borderColor: "#38bdf8",
+            backgroundColor: "rgba(56,189,248,0.12)",
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.35,
+          },
+          {
+            label: "Momentum",
+            data: [...this.momentumHistory],
+            borderColor: "#34d399",
+            backgroundColor: "rgba(52,211,153,0.08)",
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.35,
+          },
+          {
+            label: "Total Energy",
+            data: [...this.energyHistory],
+            borderColor: "#f472b6",
+            backgroundColor: "rgba(244,114,182,0.08)",
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.35,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            labels: {
+              color: "#94a3b8",
+              boxWidth: 10,
+              font: { size: 10 },
+              padding: 8,
+            },
+          },
+          tooltip: {
+            backgroundColor: "rgba(10,18,32,0.9)",
+            titleColor: "#94a3b8",
+            bodyColor: "#e2e8f0",
+            borderColor: "rgba(148,163,184,0.2)",
+            borderWidth: 1,
+          },
+        },
+        scales: {
+          x: { display: false },
+          y: {
+            display: true,
+            grid: { color: "rgba(148,163,184,0.08)" },
+            ticks: {
+              color: "#475569",
+              font: { size: 10 },
+              maxTicksLimit: 4,
+            },
+          },
+        },
+      },
+    });
+  }
+
   togglePanel() {
     this.visible = !this.visible;
     this.panel.style.display = this.visible ? "block" : "none";
     this.toggleButton.textContent = this.visible
-      ? "Hide Status"
-      : "Show Status";
+        ? "Hide Status"
+        : "Show Status";
   }
 
   updateStatus(state) {
     if (!this.statusContent) return;
-    this.graphValues.push(state.velocity);
-    if (this.graphValues.length > 40) this.graphValues.shift();
 
+    const velocity = state.velocity ?? 0;
+    const momentum = state.momentum ?? 0;
+    const kineticEnergy = state.kineticEnergy ?? 0;
+    const potentialEnergy = state.potentialEnergy ?? 0;
+    const totalEnergy = state.totalEnergy ?? 0;
+    const energyTransfer = state.energyTransfer ?? 0;
+    const collisions = state.collisions ?? 0;
+
+    this._push(this.velocityHistory, velocity);
+    this._push(this.momentumHistory, momentum);
+    this._push(this.energyHistory, totalEnergy);
+
+    // Only real, dynamically-computed physics quantities here — config
+    // values (gravity, restitution, ball count, etc.) are already visible
+    // and editable in the GUI sliders above, so showing them again here
+    // added nothing.
     const metricRows = [
-      { label: "Velocity", value: state.velocity.toFixed(3), color: "#38bdf8" },
-      { label: "Momentum", value: state.momentum.toFixed(3), color: "#34d399" },
-      { label: "Collisions", value: state.collisions, color: "#f59e0b" },
+      { label: "Velocity (m/s)", value: velocity.toFixed(3), color: "#38bdf8" },
+      { label: "Momentum (kg·m/s)", value: momentum.toFixed(3), color: "#34d399" },
+      { label: "Kinetic Energy (J)", value: kineticEnergy.toFixed(3), color: "#60a5fa" },
+      { label: "Potential Energy (J)", value: potentialEnergy.toFixed(3), color: "#fbbf24" },
+      { label: "Total Energy (J)", value: totalEnergy.toFixed(3), color: "#f472b6" },
       {
-        label: "Energy Transfer",
-        value: state.energyTransfer.toFixed(3),
-        color: "#f472b6",
+        label: "Energy Lost (this frame)",
+        value: energyTransfer.toFixed(4),
+        color: "#fb7185",
       },
-      { label: "Active Ball", value: state.activeBall, color: "#a78bfa" },
-      { label: "Damping", value: state.damping.toFixed(3), color: "#f87171" },
+      { label: "Collisions", value: collisions, color: "#f59e0b" },
       {
-        label: "Gravity",
-        value: state.gravity?.toFixed(2) ?? "-",
-        color: "#22d3ee",
-      },
-      {
-        label: "Restitution",
-        value: state.restitution?.toFixed(2) ?? "-",
-        color: "#fb923c",
-      },
-      { label: "Ball Count", value: state.ballCount ?? "-", color: "#c084fc" },
-      {
-        label: "Ball Radius",
-        value: state.ballRadius?.toFixed(2) ?? "-",
-        color: "#fde68a",
-      },
-      { label: "Mass", value: state.mass?.toFixed(2) ?? "-", color: "#86efac" },
-      {
-        label: "Launch Angle",
-        value: state.initialLaunchAngle?.toFixed(2) ?? "-",
-        color: "#93c5fd",
-      },
-      {
-        label: "Lifted Balls",
-        value: state.liftedBallCount ?? "-",
-        color: "#fda4af",
-      },
-      {
-        label: "Avg Angle",
+        label: "Avg Angle (rad)",
         value: state.averageAngle?.toFixed(3) ?? "-",
         color: "#f9a8d4",
       },
       {
-        label: "Avg Omega",
+        label: "Avg Angular Velocity (rad/s)",
         value: state.averageAngularVelocity?.toFixed(3) ?? "-",
         color: "#a7f3d0",
-      },
-      {
-        label: "Contact Dist",
-        value: state.contactDistance?.toFixed(3) ?? "-",
-        color: "#fde68a",
       },
     ];
 
     this.statusContent.innerHTML = metricRows
-      .map(
-        (row) => `
+        .map(
+            (row) => `
           <div style="display:flex; justify-content:space-between; margin:4px 0; gap:10px;">
             <span>${row.label}</span>
             <span style="color:${row.color}; font-weight:700;">${row.value}</span>
           </div>
         `,
-      )
-      .join("");
+        )
+        .join("");
 
-    this.drawGraph();
+    this._updateChart();
   }
 
-  drawGraph() {
-    if (!this.graphCanvas) return;
-    const ctx = this.graphCanvas.getContext("2d");
-    if (!ctx) return;
+  _push(arr, value) {
+    arr.push(value);
+    if (arr.length > this.historyLength) arr.shift();
+  }
 
-    const width = this.graphCanvas.width;
-    const height = this.graphCanvas.height;
-    ctx.clearRect(0, 0, width, height);
-
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
-    ctx.lineWidth = 1;
-    ctx.fillStyle = "rgba(148, 163, 184, 0.12)";
-    ctx.fillRect(0, 0, width, height);
-    for (let i = 0; i < 4; i += 1) {
-      const y = (height / 4) * i;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
-
-    ctx.beginPath();
-    this.graphValues.forEach((value, index) => {
-      const x = (index / (this.graphValues.length - 1)) * width;
-      const y =
-        height - (value / Math.max(1, Math.max(...this.graphValues))) * height;
-      if (index === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.fillStyle = "#cbd5e1";
-    ctx.font = "11px Arial";
-    ctx.fillText("Velocity trend", 8, 14);
+  _updateChart() {
+    if (!this.chart) return;
+    this.chart.data.datasets[0].data = [...this.velocityHistory];
+    this.chart.data.datasets[1].data = [...this.momentumHistory];
+    this.chart.data.datasets[2].data = [...this.energyHistory];
+    this.chart.update("none");
   }
 }
