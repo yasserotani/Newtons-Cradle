@@ -6,7 +6,7 @@ import { PHYSICS, CONFIG } from "../constants.js";
 
 const RHO_AIR = 1.204;
 const CD = 0.47;
-const K_DAMPING = 0.002;
+// const K_DAMPING = 0.002; // Removed local declaration
 
 export function calculateCrossSection(radius) {
     return Math.PI * radius * radius;
@@ -17,7 +17,7 @@ export function calculateAngularAcceleration(angle, omega, L, mass, radius, infi
     const A = calculateCrossSection(radius);
 
     const gravityTerm = -(g / L) * Math.sin(angle);
-    let viscousTerm = -(K_DAMPING / mass) * omega;
+    let viscousTerm = -(PHYSICS.VISCOUS_K / mass) * omega; // Use PHYSICS.VISCOUS_K
     let airDragTerm =
         -((RHO_AIR * CD * A * L) / (2 * mass)) * omega * Math.abs(omega);
 

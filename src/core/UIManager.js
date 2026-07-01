@@ -3,12 +3,13 @@ import { Chart, registerables } from "chart.js";
 Chart.register(...registerables);
 
 export class UIManager {
-  constructor(onReset, onPauseToggle, onResetDefaults, dragController) { // Added dragController
+  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera) { // Added resetCamera
     this.gui = new GUI();
     this.onReset = onReset;
     this.onPauseToggle = onPauseToggle;
     this.onResetDefaults = onResetDefaults;
-    this.dragController = dragController; // Store dragController
+    this.dragController = dragController;
+    this.resetCamera = resetCamera; // Store resetCamera callback
     this.panel = null;
     this.toggleButton = null;
     this.pauseButton = null;
@@ -20,41 +21,40 @@ export class UIManager {
     this.velocityHistory = Array(this.historyLength).fill(0);
     this.momentumHistory = Array(this.historyLength).fill(0);
     this.energyHistory = Array(this.historyLength).fill(0);
-    this._previousRestitution = 1.0; // Store previous restitution for toggling infinite motion
+    this._previousRestitution = 1.0;
   }
 
   createControls(params) {
-    this.controllers.gravity = this.gui
+    // Simulation Parameters Folder
+    const simFolder = this.gui.addFolder("Simulation Parameters");
+
+    this.controllers.gravity = simFolder
         .add(params, "gravity", 1, 20, 0.01)
         .onChange((value) => {
           params.gravity = value;
           this.onReset();
         });
 
-    this.controllers.restitution = this.gui
+    this.controllers.restitution = simFolder
         .add(params, "restitution", 0.1, 1.0, 0.01)
         .onChange((value) => {
           params.restitution = value;
-          // Only update _previousRestitution if infiniteMotion is NOT active
           if (!params.infiniteMotion) {
             this._previousRestitution = value;
           }
           this.onReset();
         });
 
-    // New control for infinite motion
-    this.controllers.infiniteMotion = this.gui
+    this.controllers.infiniteMotion = simFolder
         .add(params, "infiniteMotion")
         .name("Infinite Motion (No Damping)")
         .onChange((value) => {
           if (value) {
-            // Store current restitution before overriding
             this._previousRestitution = params.restitution;
-            params.restitution = 1.0; // Force to 1.0 for infinite motion
+            params.restitution = 1.0;
             this.controllers.restitution.setValue(1.0);
             this.controllers.restitution.disable();
           } else {
-            // Restore previous restitution
             params.restitution = this._previousRestitution;
             this.controllers.restitution.setValue(this._previousRestitution);
             this.controllers.restitution.enable();
@@ -62,16 +62,7 @@ export class UIManager {
           this.onReset();
         });
 
-    // New control for drag enabled
-    this.controllers.dragEnabled = this.gui
-        .add(params, "dragEnabled")
-        .name("Enable Ball Drag")
-        .onChange((value) => {
-          this.dragController.setEnabled(value); // Toggle drag controller
-        });
-
-
-    this.controllers.ballCount = this.gui
+    this.controllers.ballCount = simFolder
         .add(params, "ballCount", {
           "1   balls": 1,
           "2 balls": 2,
@@ -87,43 +78,56 @@ export class UIManager {
           this.onReset();
         });
 
-    this.controllers.ballRadius = this.gui
+    this.controllers.ballRadius = simFolder
         .add(params, "ballRadius", 0.2, 0.8, 0.01)
         .onChange((value) => {
           params.ballRadius = value;
           this.onReset();
         });
 
-    this.controllers.mass = this.gui
+    this.controllers.mass = simFolder
         .add(params, "mass", 0.5, 5, 0.1)
         .onChange((value) => {
           params.mass = value;
           this.onReset();
         });
 
-    this.controllers.initialLaunchAngle = this.gui
+    this.controllers.initialLaunchAngle = simFolder
         .add(params, "initialLaunchAngle", -3, 0, 0.01)
         .onChange((value) => {
           params.initialLaunchAngle = value;
           this.onReset();
         });
 
-    this.controllers.liftedBallCount = this.gui
+    this.controllers.liftedBallCount = simFolder
         .add(params, "liftedBallCount", 1, 4, 1)
         .onChange((value) => {
           params.liftedBallCount = value;
           this.onReset();
         });
 
-    this.gui.add(params, "reset");
+    simFolder.open(); // Open simulation parameters by default
+
+    // Display Options Folder
+    const displayFolder = this.gui.addFolder("Display Options");
+    this.controllers.dragEnabled = displayFolder
+        .add(params, "dragEnabled")
+        .name("Enable Ball Drag")
+        .onChange((value) => {
+          this.dragController.setEnabled(value);
+        });
+
+    displayFolder.add({ resetCamera: () => this.resetCamera() }, 'resetCamera').name('Reset Camera View');
+
+    displayFolder.open(); // Open display options by default
+
+    this.gui.add(params, "reset").name("Reset Simulation"); // Rename default reset button
 
     this.createStatusPanel();
 
-    // Initial state check for infiniteMotion
     if (params.infiniteMotion) {
       this.controllers.restitution.disable();
     }
-    // Initial state check for dragEnabled
     this.dragController.setEnabled(params.dragEnabled);
   }
 
@@ -131,19 +135,15 @@ export class UIManager {
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
-        // Explicitly call onChange for all controllers to ensure the simulation updates
-        // This mimics a user manually changing each value.
         this.controllers[key]._callOnChange(value);
 
-        // Special handling for restitution controller's enabled state
         if (key === 'infiniteMotion') {
-          if (value) { // if infiniteMotion is true
+          if (value) {
             this.controllers.restitution.disable();
-          } else { // if infiniteMotion is false
+          } else {
             this.controllers.restitution.enable();
           }
         }
-        // Special handling for dragEnabled controller's state
         if (key === 'dragEnabled') {
           this.dragController.setEnabled(value);
         }

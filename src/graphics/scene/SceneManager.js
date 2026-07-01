@@ -1,5 +1,6 @@
 // src/graphics/scene/SceneManager.js
 import * as THREE from "three";
+// Removed imports for RGBELoader and PMREMGenerator
 
 export class SceneManager {
   constructor() {
@@ -27,6 +28,8 @@ export class SceneManager {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.1;
+
+    // Removed Environment Map setup logic
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(20, 20),

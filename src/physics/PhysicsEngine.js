@@ -10,9 +10,9 @@ import {
 } from "./state.js";
 import { updateAllPendulums, getTotalSystemEnergy, updateCartesianCoordinates } from "./motion.js"; // Import updateCartesianCoordinates
 import { handleAllCollisions, getLastCollisionCount } from "./collision.js";
-import { CONFIG } from "../constants.js";
+import { CONFIG, PHYSICS } from "../constants.js"; // Import PHYSICS
 
-const VISCOUS_K = 0.002; // mirrors K_DAMPING in motion.js (paper page 19's k)
+// const VISCOUS_K = 0.002; // Removed local declaration
 
 export class PhysicsEngine {
   constructor(config) {
@@ -141,7 +141,7 @@ export class PhysicsEngine {
       energyTransfer,
       collisions: this.totalCollisions,
       activeBall: activeBall >= 0 ? activeBall + 1 : 0,
-      damping: VISCOUS_K,
+      damping: PHYSICS.VISCOUS_K, // Use PHYSICS.VISCOUS_K
       gravity: this.config.gravity,
       restitution: this.config.restitution ?? 1.0,
       ballCount: this.config.ballCount,

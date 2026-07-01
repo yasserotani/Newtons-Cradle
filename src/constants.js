@@ -5,6 +5,7 @@ export const PHYSICS = {
   AIR_DAMPING: 0.998,
   FIXED_DT: 1 / 120,
   CONSTRAINT_ITERATIONS: 5,
+  VISCOUS_K: 0.002, // Added VISCOUS_K here
 };
 
 export const COLLISION = {
@@ -13,7 +14,7 @@ export const COLLISION = {
 };
 
 export const CONFIG = {
-  ballCount: 6,
+  ballCount: 5,
   ballRadius: 0.4,
   threadLength: 2.0,
   supportHeight: 3.0,
