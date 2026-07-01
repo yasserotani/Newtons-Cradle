@@ -1,18 +1,18 @@
 // src/graphics/scene/SceneManager.js
 import * as THREE from "three";
-// Removed imports for RGBELoader and PMREMGenerator
+import { setupEnvironmentMap } from "../environment/environment.js"; // Import the setupEnvironmentMap function
 
 export class SceneManager {
   constructor() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0f172a);
-    this.scene.fog = new THREE.Fog(0x0f172a, 6, 24);
+    this.scene.fog = new THREE.Fog(0x0f172a, 6, 500); // Increased fog far distance from 24 to 500
 
     this.camera = new THREE.PerspectiveCamera(
       45,
       window.innerWidth / window.innerHeight,
       0.1,
-      100,
+      1000, // Increased far clipping plane from 100 to 1000
     );
     this.camera.position.set(6.2, 4.3, 7.5);
     this.camera.lookAt(0, 1.4, 0);
@@ -29,7 +29,8 @@ export class SceneManager {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.1;
 
-    // Removed Environment Map setup logic
+    // Setup environment map
+    setupEnvironmentMap(this.scene, this.renderer);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(20, 20),
@@ -41,7 +42,7 @@ export class SceneManager {
     );
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
-    this.scene.add(ground);
+    // this.scene.add(ground);
 
     document.body.appendChild(this.renderer.domElement);
 

@@ -5,7 +5,7 @@ export const PHYSICS = {
   AIR_DAMPING: 0.998,
   FIXED_DT: 1 / 120,
   CONSTRAINT_ITERATIONS: 5,
-  VISCOUS_K: 0.002, // Added VISCOUS_K here
+  VISCOUS_K: 0.1, // Increased VISCOUS_K for more damping
 };
 
 export const COLLISION = {
@@ -18,12 +18,11 @@ export const CONFIG = {
   ballRadius: 0.4,
   threadLength: 2.0,
   supportHeight: 3.0,
-  spreadZ: 0.6,
-  cradleWidth: 3.2,
+  spreadZ: 0.6, // spreadZ will be made dynamic in main.js
   initialLaunchAngle: -0.7,
   liftedBallCount: 1,
   gravity: 9.81,
-  restitution: 1.0,
+  restitution: 0.95, // Decreased restitution for energy loss during collisions
   masses: [1, 1, 1, 1, 1, 1],
   colors: {
     ball: 0xffaa00,
@@ -48,5 +47,6 @@ export const PENDULUM = {
 };
 
 export function computeCradleWidth(config) {
-  return config.cradleWidth ?? config.ballCount * config.ballRadius * 1.7;
+  // Removed config.cradleWidth ?? to always compute dynamically
+  return config.ballCount * config.ballRadius * 1.7;
 }

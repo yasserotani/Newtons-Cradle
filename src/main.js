@@ -20,12 +20,8 @@ import { StateSync } from "./animation/StateSync.js";
 import { AudioManager } from "./core/AudioManager.js";
 import { DragController } from "./interaction/DragController.js";
 
-// --- REMOVING Post-processing imports ---
-// import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-// import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-// import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-// import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
-// --- END REMOVING Post-processing imports ---
+// Create a deep copy of the initial CONFIG object
+const ORIGINAL_CONFIG = JSON.parse(JSON.stringify(CONFIG));
 
 let activeCradleGroup = null; // Initialize to null
 let activeUpdater = null; // Initialize to null
@@ -53,6 +49,7 @@ function rebuildCradle() {
 
   const nextConfig = { ...physics.config };
   nextConfig.cradleWidth = computeCradleWidth(nextConfig);
+  nextConfig.spreadZ = nextConfig.cradleWidth / 5; // Make spreadZ dynamic based on cradleWidth
 
   // Use the imported CradleBuilder class
   const nextGroup = GraphicsCradleBuilder.build(nextConfig);
@@ -68,6 +65,8 @@ const params = {
   restitution: physics.config.restitution,
   ballCount: physics.config.ballCount,
   ballRadius: physics.config.ballRadius,
+  threadLength: physics.config.threadLength, // Added threadLength to params
+  supportHeight: physics.config.supportHeight, // Added supportHeight to params
   mass: physics.config.masses?.[0] ?? 1,
   initialLaunchAngle: physics.config.initialLaunchAngle,
   liftedBallCount: physics.config.liftedBallCount,
@@ -77,6 +76,8 @@ const params = {
     physics.config.gravity = params.gravity;
     physics.config.ballCount = params.ballCount;
     physics.config.ballRadius = params.ballRadius;
+    physics.config.threadLength = params.threadLength; // Update physics config
+    physics.config.supportHeight = params.supportHeight; // Update physics config
     physics.config.initialLaunchAngle = params.initialLaunchAngle;
     physics.config.liftedBallCount = params.liftedBallCount;
     physics.config.masses = Array.from(
@@ -84,6 +85,7 @@ const params = {
         () => params.mass,
     );
     physics.config.cradleWidth = computeCradleWidth(params);
+    physics.config.spreadZ = physics.config.cradleWidth / 5; // Update spreadZ dynamically here too
 
     if (params.infiniteMotion) {
       physics.config.restitution = 1.0;
@@ -129,14 +131,17 @@ const uiManager = new UIManager(
       else animationController?.start();
     },
     () => {
+      // Use ORIGINAL_CONFIG for defaults
       const defaults = {
-        gravity: CONFIG.gravity,
-        restitution: CONFIG.restitution,
-        ballCount: CONFIG.ballCount,
-        ballRadius: CONFIG.ballRadius,
-        mass: CONFIG.masses?.[0] ?? 1,
-        initialLaunchAngle: CONFIG.initialLaunchAngle,
-        liftedBallCount: CONFIG.liftedBallCount,
+        gravity: ORIGINAL_CONFIG.gravity,
+        restitution: ORIGINAL_CONFIG.restitution,
+        ballCount: ORIGINAL_CONFIG.ballCount,
+        ballRadius: ORIGINAL_CONFIG.ballRadius,
+        threadLength: ORIGINAL_CONFIG.threadLength, // Added to defaults
+        supportHeight: ORIGINAL_CONFIG.supportHeight, // Added to defaults
+        mass: ORIGINAL_CONFIG.masses?.[0] ?? 1,
+        initialLaunchAngle: ORIGINAL_CONFIG.initialLaunchAngle,
+        liftedBallCount: ORIGINAL_CONFIG.liftedBallCount,
         infiniteMotion: false,
         dragEnabled: true, // Default for drag control
       };
@@ -150,22 +155,6 @@ const uiManager = new UIManager(
 );
 uiManager.createControls(params);
 
-// --- REMOVING Post-processing setup ---
-// const composer = new EffectComposer(renderer);
-// composer.addPass(new RenderPass(scene, camera));
-//
-// const bloomPass = new UnrealBloomPass(
-//   new THREE.Vector2(window.innerWidth, window.innerHeight),
-//   0.5, // strength
-//   0.4, // radius
-//   0.85 // threshold
-// );
-// composer.addPass(bloomPass);
-//
-// const smaaPass = new SMAAPass(window.innerWidth, window.innerHeight);
-// composer.addPass(smaaPass);
-// --- END REMOVING Post-processing setup ---
-
 const stateSync = new StateSync(physicsBridge, physics);
 animationController = new AnimationController(() => {
   const dt = timeManager.update();
@@ -176,7 +165,6 @@ animationController = new AnimationController(() => {
     collisions: 0,
     energyTransfer: 0,
     activeBall: 0,
-    // damping: 0.998, // Removed redundant default
   };
   status.gravity = physics.config.gravity;
   status.restitution = physics.config.restitution;
@@ -187,7 +175,7 @@ animationController = new AnimationController(() => {
   status.liftedBallCount = status.liftedBallCount;
   uiManager.updateStatus(status);
   controls.update();
-  renderer.render(scene, camera); // Reverted to direct render
+  renderer.render(scene, camera);
 
   if (physics.getLastFrameCollisionCount() > 0) {
     audioManager.playCollision();
@@ -200,10 +188,6 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  // --- REMOVING Composer resize updates ---
-  // composer.setSize(window.innerWidth, window.innerHeight); // Update composer size
-  // bloomPass.resolution.set(window.innerWidth, window.innerHeight); // Update bloom resolution
-  // --- END REMOVING Composer resize updates ---
 });
 
 window.physicsBridge = physicsBridge;

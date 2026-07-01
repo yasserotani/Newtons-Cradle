@@ -1,6 +1,6 @@
 // src/graphics/builders/CradleBuilder.js
 import * as THREE from "three";
-import { CradleMaterials } from "../materials/CradleMaterials.js";
+import { CradleMaterials, createCradleArm } from "../materials/CradleMaterials.js";
 
 export class CradleBuilder {
   static build(config) {
@@ -10,45 +10,20 @@ export class CradleBuilder {
       ballRadius,
       supportHeight,
       spreadZ,
-      cradleWidth,
+      cradleWidth, // cradleWidth is now available in config
       threadLength,
     } = config;
 
     const spacing = cradleWidth / Math.max(ballCount - 1, 1);
     const startX = -cradleWidth / 2;
 
-    // ----- 1. بناء العارضتين المتوازيتين -----
-    const supportMat = CradleMaterials.getSupportMaterial();
-    // جسم العارضة (شريط طويل)
-    const supportGeo = new THREE.BoxGeometry(cradleWidth + 0.6, 0.15, 0.15);
-
-    // العارضة الأمامية (Z موجب)
-    const supportFront = new THREE.Mesh(supportGeo, supportMat);
-    supportFront.position.set(0, supportHeight, spreadZ);
-    supportFront.castShadow = true;
-    supportFront.receiveShadow = true;
-    group.add(supportFront);
-
-    // العارضة الخلفية (Z سالب)
-    const supportBack = new THREE.Mesh(supportGeo, supportMat);
-    supportBack.position.set(0, supportHeight, -spreadZ);
-    supportBack.castShadow = true;
-    supportBack.receiveShadow = true;
-    group.add(supportBack);
-
-    // (اختياري) إضافة أعمدة رأسية صغيرة في الأطراف لمظهر واقعي
-    const pillarMat = CradleMaterials.getPillarMaterial();
-    const pillarGeo = new THREE.BoxGeometry(0.1, supportHeight, 0.1);
-    const positions = [-cradleWidth / 2 - 0.3, cradleWidth / 2 + 0.3];
-    positions.forEach((x) => {
-      [-spreadZ, spreadZ].forEach((z) => {
-        const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-        pillar.position.set(x, supportHeight / 2, z);
-        pillar.castShadow = true;
-        pillar.receiveShadow = true;
-        group.add(pillar);
-      });
-    });
+    // ----- 1. بناء العارضة الواحدة مع شريطين -----
+    // createCradleArm now creates two bars internally, so we call it once.
+    // Pass cradleWidth as the first argument and spreadZ as the second (barZOffset)
+    const cradleArm = createCradleArm(cradleWidth, spreadZ);
+    cradleArm.position.y = supportHeight - 2;
+    cradleArm.position.z = 0; // The entire arm group is centered at Z=0
+    group.add(cradleArm);
 
     // ----- 2. بناء الكرات والخيوط -----
     const ballMat = CradleMaterials.getBallMaterial();
@@ -71,31 +46,32 @@ export class CradleBuilder {
       group.add(ball);
       balls.push(ball);
 
-      // ---- الخيط الأول (الأمامي) ----
-      const startFront = new THREE.Vector3(x, supportHeight, spreadZ);
+      // ---- الخيوط ----
+      // Attach two threads to the two bars of the single stand
+      // The bars are now at +spreadZ and -spreadZ relative to the cradleArm's local Z=0
+      // Since cradleArm.position.z is 0, these are also the world Z positions.
+      const startTopBarFront = new THREE.Vector3(x, supportHeight, spreadZ);
+      const startTopBarBack = new THREE.Vector3(x, supportHeight, -spreadZ);
       const end = new THREE.Vector3(x, y, z);
-      // استخدام مادة الخيط من CradleMaterials
 
-      const frontGeo = new THREE.BufferGeometry().setFromPoints([
-        startFront,
+      const frontThreadGeo = new THREE.BufferGeometry().setFromPoints([
+        startTopBarFront,
         end,
       ]);
-      const frontLine = new THREE.Line(frontGeo, threadMat);
-      group.add(frontLine);
+      const frontThreadLine = new THREE.Line(frontThreadGeo, threadMat);
+      group.add(frontThreadLine);
 
-      // ---- الخيط الثاني (الخلفي) ----
-      const startBack = new THREE.Vector3(x, supportHeight, -spreadZ);
-      const backGeo = new THREE.BufferGeometry().setFromPoints([
-        startBack,
+      const backThreadGeo = new THREE.BufferGeometry().setFromPoints([
+        startTopBarBack,
         end,
       ]);
-      const backLine = new THREE.Line(backGeo, threadMat);
-      group.add(backLine);
+      const backThreadLine = new THREE.Line(backThreadGeo, threadMat);
+      group.add(backThreadLine);
 
       // نخزّن مراجع الخيوط مع نقطة البداية الثابتة لكل خيط
       threads.push({
-        front: { line: frontLine, start: startFront.clone() },
-        back: { line: backLine, start: startBack.clone() },
+        front: { line: frontThreadLine, start: startTopBarFront.clone() },
+        back: { line: backThreadLine, start: startTopBarBack.clone() },
       });
     }
 
