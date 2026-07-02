@@ -8,11 +8,9 @@ import {
   initPhysicsSystem,
   resetSystem,
 } from "./state.js";
-import { updateAllPendulums, getTotalSystemEnergy, updateCartesianCoordinates } from "./motion.js"; // Import updateCartesianCoordinates
+import { updateAllPendulums, getTotalSystemEnergy, updateCartesianCoordinates } from "./motion.js";
 import { handleAllCollisions, getLastCollisionCount } from "./collision.js";
-import { CONFIG, PHYSICS } from "../constants.js"; // Import PHYSICS
-
-// const VISCOUS_K = 0.002; // Removed local declaration
+import { CONFIG, PHYSICS } from "../constants.js";
 
 export class PhysicsEngine {
   constructor(config) {
@@ -31,13 +29,15 @@ export class PhysicsEngine {
     this.lastEnergy = null;
   }
 
-  setInitialState({ angle, liftedBallCount } = {}) {
-    if (typeof angle === "number") this.config.initialLaunchAngle = angle;
-    if (typeof liftedBallCount === "number") {
-      this.config.liftedBallCount = liftedBallCount;
-    }
-    this.reset();
-  }
+  // This method is no longer needed as initPhysicsSystem always starts at rest
+  // and applyInitialLaunchState will handle setting the initial angle.
+  // setInitialState({ angle, liftedBallCount } = {}) {
+  //   if (typeof angle === "number") this.config.initialLaunchAngle = angle;
+  //   if (typeof liftedBallCount === "number") {
+  //     this.config.liftedBallCount = liftedBallCount;
+  //   }
+  //   this.reset();
+  // }
 
   update(dt) {
     const safeDt = Math.min(Math.max(dt, 0), 0.03);
@@ -84,6 +84,30 @@ export class PhysicsEngine {
       ball.velocity = 0; // Held ball has no velocity
 
       // Update Cartesian coordinates to reflect the new angle
+      updateCartesianCoordinates(ball, CONFIG.threadLength);
+    }
+  }
+
+  /**
+   * Applies an initial launch angle to a specified number of balls.
+   * @param {number} angle - The angle to set for the lifted balls.
+   * @param {number} liftedBallCount - The number of balls to lift from one side.
+   */
+  applyInitialLaunchState(angle, liftedBallCount) {
+    // Ensure all balls are reset to hanging straight down first
+    resetSystem();
+
+    // Apply the initial angle to the specified number of balls
+    for (let i = 0; i < pendulumBalls.length; i++) {
+      const ball = pendulumBalls[i];
+      if (i < liftedBallCount) {
+        ball.angle = angle;
+        ball.velocity = 0; // Start from rest at the lifted angle
+      } else {
+        ball.angle = 0;
+        ball.velocity = 0;
+      }
+      // Update Cartesian coordinates for all balls to reflect their new angles
       updateCartesianCoordinates(ball, CONFIG.threadLength);
     }
   }

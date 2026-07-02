@@ -7,7 +7,7 @@ export function setupEnvironmentMap(scene, renderer) {
   pmremGenerator.compileEquirectangularShader();
 
   const exrLoader = new EXRLoader();
-  exrLoader.load('/assets/blue_photo_studio_4k.exr', (texture) => {
+  exrLoader.load('/assets/neon_photostudio_4k.exr', (texture) => {
     texture.mapping = THREE.EquirectangularReflectionMapping;
 
     const envMap = pmremGenerator.fromEquirectangular(texture).texture;

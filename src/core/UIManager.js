@@ -3,13 +3,14 @@ import { Chart, registerables } from "chart.js";
 Chart.register(...registerables);
 
 export class UIManager {
-  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera) { // Added resetCamera
+  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera, onApplyInitialMotion) { // Added onApplyInitialMotion
     this.gui = new GUI();
     this.onReset = onReset;
     this.onPauseToggle = onPauseToggle;
     this.onResetDefaults = onResetDefaults;
     this.dragController = dragController;
-    this.resetCamera = resetCamera; // Store resetCamera callback
+    this.resetCamera = resetCamera;
+    this.onApplyInitialMotion = onApplyInitialMotion; // Store the new callback
     this.panel = null;
     this.toggleButton = null;
     this.pauseButton = null;
@@ -96,15 +97,19 @@ export class UIManager {
         .add(params, "initialLaunchAngle", -3, 0, 0.01)
         .onChange((value) => {
           params.initialLaunchAngle = value;
-          this.onReset();
+          // No onReset here, as we want to apply it explicitly
         });
 
     this.controllers.liftedBallCount = simFolder
         .add(params, "liftedBallCount", 1, 4, 1)
         .onChange((value) => {
           params.liftedBallCount = value;
-          this.onReset();
+          // No onReset here, as we want to apply it explicitly
         });
+
+    // New button to apply the chosen angle
+    simFolder.add({ applyAngle: () => this.onApplyInitialMotion() }, 'applyAngle').name('Apply Angle ');
+
 
     simFolder.open(); // Open simulation parameters by default
 
@@ -135,7 +140,11 @@ export class UIManager {
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
-        this.controllers[key]._callOnChange(value);
+        // Do not call _callOnChange for initialLaunchAngle and liftedBallCount
+        // as they should not trigger a full reset on value change.
+        if (key !== 'initialLaunchAngle' && key !== 'liftedBallCount') {
+          this.controllers[key]._callOnChange(value);
+        }
 
         if (key === 'infiniteMotion') {
           if (value) {

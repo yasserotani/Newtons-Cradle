@@ -60,13 +60,20 @@ function rebuildCradle() {
   // physicsBridge.updater will be set after its instantiation
 }
 
+// Function to apply the initial angle and launch the simulation
+const applyInitialMotion = () => {
+  physics.applyInitialLaunchState(params.initialLaunchAngle, params.liftedBallCount);
+  // Manually update the graphics to reflect the new initial state
+  activeUpdater.updateBalls(physics.getPositions());
+};
+
 const params = {
   gravity: physics.config.gravity,
   restitution: physics.config.restitution,
   ballCount: physics.config.ballCount,
   ballRadius: physics.config.ballRadius,
-  threadLength: physics.config.threadLength, // Added threadLength to params
-  supportHeight: physics.config.supportHeight, // Added supportHeight to params
+  threadLength: physics.config.threadLength,
+  supportHeight: physics.config.supportHeight,
   mass: physics.config.masses?.[0] ?? 1,
   initialLaunchAngle: physics.config.initialLaunchAngle,
   liftedBallCount: physics.config.liftedBallCount,
@@ -76,8 +83,8 @@ const params = {
     physics.config.gravity = params.gravity;
     physics.config.ballCount = params.ballCount;
     physics.config.ballRadius = params.ballRadius;
-    physics.config.threadLength = params.threadLength; // Update physics config
-    physics.config.supportHeight = params.supportHeight; // Update physics config
+    physics.config.threadLength = params.threadLength;
+    physics.config.supportHeight = params.supportHeight;
     physics.config.initialLaunchAngle = params.initialLaunchAngle;
     physics.config.liftedBallCount = params.liftedBallCount;
     physics.config.masses = Array.from(
@@ -95,12 +102,14 @@ const params = {
 
     physics.gravity = params.gravity;
     physics.infiniteMotion = params.infiniteMotion;
-    physics.reset();
+    physics.reset(); // This will reset balls to angle 0, velocity 0
     rebuildCradle();
     // Ensure physicsBridge.updater is updated after rebuildCradle in reset
     if (window.physicsBridge) { // Check if it's already instantiated
       window.physicsBridge.updater = activeUpdater;
     }
+    // After reset, ensure graphics are updated to show balls at rest
+    activeUpdater.updateBalls(physics.getPositions());
   },
 };
 
@@ -137,8 +146,8 @@ const uiManager = new UIManager(
         restitution: ORIGINAL_CONFIG.restitution,
         ballCount: ORIGINAL_CONFIG.ballCount,
         ballRadius: ORIGINAL_CONFIG.ballRadius,
-        threadLength: ORIGINAL_CONFIG.threadLength, // Added to defaults
-        supportHeight: ORIGINAL_CONFIG.supportHeight, // Added to defaults
+        threadLength: ORIGINAL_CONFIG.threadLength,
+        supportHeight: ORIGINAL_CONFIG.supportHeight,
         mass: ORIGINAL_CONFIG.masses?.[0] ?? 1,
         initialLaunchAngle: ORIGINAL_CONFIG.initialLaunchAngle,
         liftedBallCount: ORIGINAL_CONFIG.liftedBallCount,
@@ -151,7 +160,8 @@ const uiManager = new UIManager(
       params.reset();
     },
     dragController, // Pass dragController to UIManager
-    resetCamera // Pass resetCamera callback to UIManager
+    resetCamera, // Pass resetCamera callback to UIManager
+    applyInitialMotion // Pass the new function to UIManager
 );
 uiManager.createControls(params);
 

@@ -2,6 +2,7 @@
 // Pure data storage. No physics math lives here — only ball creation/reset.
 
 import { CONFIG, computeCradleWidth } from "../constants.js"; // Import computeCradleWidth
+import { updateCartesianCoordinates } from "./motion.js"; // Import to update coords after setting angle
 
 export const pendulumBalls = [];
 
@@ -14,14 +15,11 @@ export const environment = {
  * Builds the pendulumBalls array from scratch based on the LIVE CONFIG
  * values. Uses the dynamic cradleWidth to calculate spacing so that the
  * physics anchor points perfectly match the 3D visual anchor points.
+ * Balls are always initialized at rest (angle 0, velocity 0).
+ * Initial launch angle will be applied externally.
  */
 export function initPhysicsSystem() {
   pendulumBalls.length = 0;
-
-  const liftedBallCount = Math.max(
-      1,
-      Math.min(CONFIG.ballCount, CONFIG.liftedBallCount ?? 1),
-  );
 
   // 1. Calculate the cradle width using the shared function
   const cradleWidth = computeCradleWidth(CONFIG);
@@ -35,9 +33,9 @@ export function initPhysicsSystem() {
   for (let i = 0; i < CONFIG.ballCount; i++) {
     const pivotX = startX + (i * spacing);
     const pivotY = CONFIG.supportHeight;
-    const angle = i < liftedBallCount ? CONFIG.initialLaunchAngle : 0;
+    const angle = 0; // Always start at angle 0, motion will be applied externally
 
-    pendulumBalls.push({
+    const newBall = {
       id: i,
       pivotX,
       pivotY,
@@ -45,10 +43,13 @@ export function initPhysicsSystem() {
       velocity: 0, // angular velocity (rad/s)
       radius: CONFIG.ballRadius,
       mass: CONFIG.masses?.[i] ?? 1,
-      x: pivotX + CONFIG.threadLength * Math.sin(angle),
-      y: pivotY - CONFIG.threadLength * Math.cos(angle),
+      x: 0, // Will be updated by updateCartesianCoordinates
+      y: 0, // Will be updated by updateCartesianCoordinates
       held: false, // New field: default to false
-    });
+    };
+    // Update Cartesian coordinates to reflect the initial angle (0)
+    updateCartesianCoordinates(newBall, CONFIG.threadLength);
+    pendulumBalls.push(newBall);
   }
 }
 
@@ -59,8 +60,8 @@ export function resetSystem() {
   pendulumBalls.forEach((ball) => {
     ball.angle = 0;
     ball.velocity = 0;
-    ball.x = ball.pivotX;
-    ball.y = ball.pivotY - CONFIG.threadLength;
+    // Update Cartesian coordinates to reflect the reset angle (0)
+    updateCartesianCoordinates(ball, CONFIG.threadLength);
     ball.held = false; // Ensure held state is reset
   });
 }
