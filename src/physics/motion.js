@@ -6,18 +6,17 @@ import { PHYSICS, CONFIG } from "../constants.js";
 
 const RHO_AIR = 1.204;
 const CD = 0.47;
-// const K_DAMPING = 0.002; // Removed local declaration
 
 export function calculateCrossSection(radius) {
     return Math.PI * radius * radius;
 }
 
 export function calculateAngularAcceleration(angle, omega, L, mass, radius, infiniteMotion) {
-    const g = PHYSICS.GRAVITY;
+    const g = CONFIG.gravity; // FIX: was PHYSICS.GRAVITY, a frozen constant the gravity slider never touched
     const A = calculateCrossSection(radius);
 
     const gravityTerm = -(g / L) * Math.sin(angle);
-    let viscousTerm = -(PHYSICS.VISCOUS_K / mass) * omega; // Use PHYSICS.VISCOUS_K
+    let viscousTerm = -(PHYSICS.VISCOUS_K / mass) * omega;
     let airDragTerm =
         -((RHO_AIR * CD * A * L) / (2 * mass)) * omega * Math.abs(omega);
 
@@ -66,7 +65,7 @@ export function calculateKineticEnergy(omega, L, mass) {
 }
 
 export function calculatePotentialEnergy(angle, L, mass) {
-    const g = PHYSICS.GRAVITY;
+    const g = CONFIG.gravity; // FIX: was PHYSICS.GRAVITY
     return mass * g * L * (1 - Math.cos(angle));
 }
 
@@ -113,7 +112,8 @@ export function updateAllPendulums(dt, infiniteMotion) {
     const L = CONFIG.threadLength;
 
     pendulumBalls.forEach((ball) => {
-        if (!ball.held) { // Only integrate if the ball is NOT held
+        if (!ball.held) {
+            // Only integrate if the ball is NOT held
             const { newTheta, newOmega } = rk4Step(
                 ball.angle,
                 ball.velocity,
@@ -136,7 +136,6 @@ export function updateAllPendulums(dt, infiniteMotion) {
         updateCartesianCoordinates(ball, L);
 
         // Store per-ball energy too, in case the UI wants to show it per-ball
-        // Skip energy calculation for held balls, as their state is externally controlled
         if (!ball.held) {
             const energy = calculateMechanicalEnergy(ball.angle, ball.velocity, L, ball.mass);
             ball.kineticEnergy = energy.K;
@@ -151,9 +150,9 @@ export function updateAllPendulums(dt, infiniteMotion) {
 }
 
 export function naturalFrequency(L) {
-    return Math.sqrt(PHYSICS.GRAVITY / L);
+    return Math.sqrt(CONFIG.gravity / L); // FIX: was PHYSICS.GRAVITY
 }
 
 export function periodOfOscillation(L) {
-    return 2 * Math.PI * Math.sqrt(L / PHYSICS.GRAVITY);
+    return 2 * Math.PI * Math.sqrt(L / CONFIG.gravity); // FIX: was PHYSICS.GRAVITY
 }

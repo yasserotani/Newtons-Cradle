@@ -29,19 +29,11 @@ export class PhysicsEngine {
     this.lastEnergy = null;
   }
 
-  // This method is no longer needed as initPhysicsSystem always starts at rest
-  // and applyInitialLaunchState will handle setting the initial angle.
-  // setInitialState({ angle, liftedBallCount } = {}) {
-  //   if (typeof angle === "number") this.config.initialLaunchAngle = angle;
-  //   if (typeof liftedBallCount === "number") {
-  //     this.config.liftedBallCount = liftedBallCount;
-  //   }
-  //   this.reset();
-  // }
-
   update(dt) {
     const safeDt = Math.min(Math.max(dt, 0), 0.03);
-    const substeps = Math.max(1, Math.ceil(safeDt / (1 / 120)));
+    // FIX: was a hardcoded `1 / 120` — now reads the single declared
+    // constant so FIXED_DT can't drift out of sync with itself again.
+    const substeps = Math.max(1, Math.ceil(safeDt / PHYSICS.FIXED_DT));
     const stepDt = safeDt / substeps;
 
     this.lastFrameCollisions = 0;
@@ -75,8 +67,6 @@ export class PhysicsEngine {
     if (index >= 0 && index < pendulumBalls.length) {
       const ball = pendulumBalls[index];
       // Clamp angle to a reasonable range to prevent visual glitches
-      // User requested "not more than 90%", interpreting as approx 90% of PI/2 (90 degrees from vertical)
-      // Math.PI / 2 is ~1.57 radians. 90% of that is ~1.41 radians.
       const MAX_DRAG_ANGLE = 1.4; // Approximately 80 degrees
       const clampedAngle = Math.max(-MAX_DRAG_ANGLE, Math.min(MAX_DRAG_ANGLE, angle));
 
@@ -126,8 +116,7 @@ export class PhysicsEngine {
     const L = CONFIG.threadLength;
 
     // v = ω·L (paper page 5) — linear velocity, in m/s, not raw angular
-    // velocity. Previously these summed |ω| directly, which is missing
-    // the L factor and isn't actually a valid velocity or momentum.
+    // velocity.
     const velocity = pendulumBalls.reduce(
         (sum, b) => sum + Math.abs(b.velocity) * L,
         0,
@@ -139,6 +128,13 @@ export class PhysicsEngine {
     const activeBall = pendulumBalls.findIndex(
         (b) => Math.abs(b.velocity) > 0.001,
     );
+
+    // NEW: per-ball linear velocity (signed, m/s). This is what was
+    // missing for the UI — previously only the *summed* velocity across
+    // all balls was exposed, so there was no way for the chart to show
+    // which individual ball(s) were actually moving.
+    const ballVelocities = pendulumBalls.map((b) => b.velocity * L);
+
     const averageAngle =
         pendulumBalls.reduce((sum, b) => sum + b.angle, 0) /
         pendulumBalls.length;
@@ -149,7 +145,6 @@ export class PhysicsEngine {
     const { K, U, E } = getTotalSystemEnergy();
 
     // energyTransfer: how much total energy was lost since the last frame
-    // (paper page 16's dE/dt, just expressed per-frame instead of per-second)
     let energyTransfer = 0;
     if (this.lastEnergy !== null) {
       energyTransfer = Math.max(0, this.lastEnergy - E);
@@ -165,7 +160,8 @@ export class PhysicsEngine {
       energyTransfer,
       collisions: this.totalCollisions,
       activeBall: activeBall >= 0 ? activeBall + 1 : 0,
-      damping: PHYSICS.VISCOUS_K, // Use PHYSICS.VISCOUS_K
+      ballVelocities, // NEW — feeds UIManager's per-ball activity chart
+      damping: PHYSICS.VISCOUS_K,
       gravity: this.config.gravity,
       restitution: this.config.restitution ?? 1.0,
       ballCount: this.config.ballCount,

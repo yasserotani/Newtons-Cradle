@@ -3,14 +3,14 @@ import { Chart, registerables } from "chart.js";
 Chart.register(...registerables);
 
 export class UIManager {
-  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera, onApplyInitialMotion) { // Added onApplyInitialMotion
+  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera, onApplyInitialMotion) {
     this.gui = new GUI();
     this.onReset = onReset;
     this.onPauseToggle = onPauseToggle;
     this.onResetDefaults = onResetDefaults;
     this.dragController = dragController;
     this.resetCamera = resetCamera;
-    this.onApplyInitialMotion = onApplyInitialMotion; // Store the new callback
+    this.onApplyInitialMotion = onApplyInitialMotion;
     this.panel = null;
     this.toggleButton = null;
     this.pauseButton = null;
@@ -23,6 +23,11 @@ export class UIManager {
     this.momentumHistory = Array(this.historyLength).fill(0);
     this.energyHistory = Array(this.historyLength).fill(0);
     this._previousRestitution = 1.0;
+
+    // NEW — per-ball "who's moving" bar chart state
+    this.ballChart = null;
+    this._ballChartCount = 0;
+    this.ballMoveThreshold = 0.02; // m/s — below this a ball counts as "at rest" for highlighting
   }
 
   createControls(params) {
@@ -108,8 +113,7 @@ export class UIManager {
         });
 
     // New button to apply the chosen angle
-    simFolder.add({ applyAngle: () => this.onApplyInitialMotion() }, 'applyAngle').name('Apply Angle ');
-
+    simFolder.add({ applyAngle: () => this.onApplyInitialMotion() }, 'applyAngle').name('Apply Angle & Launch');
 
     simFolder.open(); // Open simulation parameters by default
 
@@ -126,7 +130,7 @@ export class UIManager {
 
     displayFolder.open(); // Open display options by default
 
-    this.gui.add(params, "reset").name("Reset Simulation"); // Rename default reset button
+    this.gui.add(params, "reset").name("Reset Simulation");
 
     this.createStatusPanel();
 
@@ -137,27 +141,43 @@ export class UIManager {
   }
 
   setControllerValues(values) {
+    // Bulk restore: sync every controller's DISPLAYED value only. We
+    // deliberately do NOT let each controller fire its own onChange here.
+    // Each onChange also triggers a full physics reset, so calling all of
+    // them back-to-back used to mean up to ~7 redundant resets per click,
+    // and — worse — a real bug: `restitution`'s onChange ran before
+    // `infiniteMotion`'s (object key order), so if Infinite Motion had
+    // been left on, restitution's handler didn't know infiniteMotion was
+    // about to turn off and skipped refreshing `_previousRestitution`.
+    // infiniteMotion's handler then immediately overwrote the correctly
+    // reset restitution value with that stale cached number — restitution
+    // silently failed to reset whenever Infinite Motion had been toggled
+    // on. The caller already does one authoritative params.reset() right
+    // after this call, so no controller needs to trigger physics here.
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
-        // Do not call _callOnChange for initialLaunchAngle and liftedBallCount
-        // as they should not trigger a full reset on value change.
-        if (key !== 'initialLaunchAngle' && key !== 'liftedBallCount') {
-          this.controllers[key]._callOnChange(value);
-        }
-
-        if (key === 'infiniteMotion') {
-          if (value) {
-            this.controllers.restitution.disable();
-          } else {
-            this.controllers.restitution.enable();
-          }
-        }
-        if (key === 'dragEnabled') {
-          this.dragController.setEnabled(value);
-        }
       }
     });
+
+    // Keep restitution's "what to restore when infinite motion turns
+    // off" baseline in sync with the values actually being restored,
+    // instead of whatever was cached from before this reset.
+    if ('restitution' in values) {
+      this._previousRestitution = values.restitution;
+    }
+
+    if ('infiniteMotion' in values) {
+      if (values.infiniteMotion) {
+        this.controllers.restitution?.disable();
+      } else {
+        this.controllers.restitution?.enable();
+      }
+    }
+
+    if ('dragEnabled' in values) {
+      this.dragController.setEnabled(values.dragEnabled);
+    }
   }
 
   createStatusPanel() {
@@ -211,6 +231,26 @@ export class UIManager {
     this.panel.appendChild(chartWrap);
 
     this._initChart();
+
+    // NEW — small label + canvas for the per-ball activity chart, so you
+    // can see at a glance which ball(s) are actually swinging right now.
+    const ballChartLabel = document.createElement("div");
+    ballChartLabel.textContent = "Ball Activity";
+    ballChartLabel.style.fontSize = "11px";
+    ballChartLabel.style.color = "#94a3b8";
+    ballChartLabel.style.margin = "10px 0 4px";
+    this.panel.appendChild(ballChartLabel);
+
+    const ballChartWrap = document.createElement("div");
+    ballChartWrap.style.position = "relative";
+    ballChartWrap.style.height = "70px";
+    ballChartWrap.style.borderRadius = "8px";
+    ballChartWrap.style.overflow = "hidden";
+    ballChartWrap.style.background = "rgba(15, 23, 42, 0.55)";
+
+    this.ballActivityCanvas = document.createElement("canvas");
+    ballChartWrap.appendChild(this.ballActivityCanvas);
+    this.panel.appendChild(ballChartWrap);
 
     document.body.appendChild(this.panelWrapper);
 
@@ -334,6 +374,54 @@ export class UIManager {
     });
   }
 
+  // NEW — bar chart with one bar per ball. Rebuilt whenever ball count
+  // changes (since Chart.js can't cleanly resize a dataset's category
+  // axis in place).
+  _initBallChart(count) {
+    if (this.ballChart) {
+      this.ballChart.destroy();
+    }
+    const labels = Array.from({ length: count }, (_, i) => `Ball ${i + 1}`);
+
+    this.ballChart = new Chart(this.ballActivityCanvas, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "|velocity| (m/s)",
+            data: Array(count).fill(0),
+            backgroundColor: Array(count).fill("#334155"),
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(10,18,32,0.9)",
+            titleColor: "#94a3b8",
+            bodyColor: "#e2e8f0",
+            borderColor: "rgba(148,163,184,0.2)",
+            borderWidth: 1,
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: "#64748b", font: { size: 9 } },
+            grid: { display: false },
+          },
+          y: { display: false, beginAtZero: true },
+        },
+      },
+    });
+    this._ballChartCount = count;
+  }
+
   togglePanel() {
     this.visible = !this.visible;
     this.panel.style.display = this.visible ? "block" : "none";
@@ -352,10 +440,30 @@ export class UIManager {
     const totalEnergy = state.totalEnergy ?? 0;
     const energyTransfer = state.energyTransfer ?? 0;
     const collisions = state.collisions ?? 0;
+    const ballVelocities = state.ballVelocities ?? []; // NEW
 
     this._push(this.velocityHistory, velocity);
     this._push(this.momentumHistory, momentum);
     this._push(this.energyHistory, totalEnergy);
+
+    // NEW — keep the per-ball chart in sync (rebuild only if ball count
+    // changed) and color each bar based on whether that ball is actually
+    // moving right now.
+    if (ballVelocities.length) {
+      if (!this.ballChart || this._ballChartCount !== ballVelocities.length) {
+        this._initBallChart(ballVelocities.length);
+      }
+      const ds = this.ballChart.data.datasets[0];
+      ds.data = ballVelocities.map((v) => Math.abs(v));
+      ds.backgroundColor = ballVelocities.map((v) =>
+          Math.abs(v) > this.ballMoveThreshold ? "#38bdf8" : "#334155",
+      );
+      this.ballChart.update("none");
+    }
+
+    const movingBalls = ballVelocities
+        .map((v, i) => (Math.abs(v) > this.ballMoveThreshold ? i + 1 : null))
+        .filter((n) => n !== null);
 
     // Only real, dynamically-computed physics quantities here — config
     // values (gravity, restitution, ball count, etc.) are already visible
@@ -373,6 +481,11 @@ export class UIManager {
         color: "#fb7185",
       },
       { label: "Collisions", value: collisions, color: "#f59e0b" },
+      {
+        label: "Moving Ball(s)", // NEW
+        value: movingBalls.length ? movingBalls.join(", ") : "—",
+        color: "#38bdf8",
+      },
       {
         label: "Avg Angle (rad)",
         value: state.averageAngle?.toFixed(3) ?? "-",
