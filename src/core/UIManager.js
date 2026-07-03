@@ -99,7 +99,7 @@ export class UIManager {
         });
 
     this.controllers.initialLaunchAngle = simFolder
-        .add(params, "initialLaunchAngle", -3, 0, 0.01)
+        .add(params, "initialLaunchAngle", -120, 0, 0.01)
         .onChange((value) => {
           params.initialLaunchAngle = value;
           // No onReset here, as we want to apply it explicitly
@@ -157,6 +157,7 @@ export class UIManager {
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
+        this.controllers[key].updateDisplay();
       }
     });
 
@@ -441,6 +442,7 @@ export class UIManager {
     const energyTransfer = state.energyTransfer ?? 0;
     const collisions = state.collisions ?? 0;
     const ballVelocities = state.ballVelocities ?? []; // NEW
+    const ballAngles = state.ballAngles ?? []; // NEW: Get individual ball angles
 
     this._push(this.velocityHistory, velocity);
     this._push(this.momentumHistory, momentum);
@@ -469,7 +471,7 @@ export class UIManager {
     // values (gravity, restitution, ball count, etc.) are already visible
     // and editable in the GUI sliders above, so showing them again here
     // added nothing.
-    const metricRows = [
+    let metricRows = [
       { label: "Velocity (m/s)", value: velocity.toFixed(3), color: "#38bdf8" },
       { label: "Momentum (kg·m/s)", value: momentum.toFixed(3), color: "#34d399" },
       { label: "Kinetic Energy (J)", value: kineticEnergy.toFixed(3), color: "#60a5fa" },
@@ -486,17 +488,19 @@ export class UIManager {
         value: movingBalls.length ? movingBalls.join(", ") : "—",
         color: "#38bdf8",
       },
-      {
-        label: "Avg Angle (rad)",
-        value: state.averageAngle?.toFixed(3) ?? "-",
-        color: "#f9a8d4",
-      },
-      {
-        label: "Avg Angular Velocity (rad/s)",
-        value: state.averageAngularVelocity?.toFixed(3) ?? "-",
-        color: "#a7f3d0",
-      },
     ];
+
+    // Add individual ball angles
+    ballAngles.forEach((angle, index) => {
+      metricRows.push({
+        label: `Ball ${index + 1} Angle (deg)`,
+        value: (angle * (180 / Math.PI)).toFixed(3),
+        color: "#f9a8d4",
+      });
+    });
+
+    // Remove average angle and average angular velocity
+    // metricRows = metricRows.filter(row => !row.label.startsWith("Avg Angle") && !row.label.startsWith("Avg Angular Velocity"));
 
     this.statusContent.innerHTML = metricRows
         .map(

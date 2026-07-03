@@ -7,36 +7,15 @@ import { pendulumBalls } from "./state.js";
 import { COLLISION, CONFIG } from "../constants.js";
 import { updateCartesianCoordinates } from "./motion.js";
 
-// ─────────────────────────────────────────────────────────────────────────
-// Tunables
-// ─────────────────────────────────────────────────────────────────────────
+const CORRECTION_PERCENT = 1.0; // Increased to 1.0 for more aggressive correction
+const POSITION_SLOP = 0; // Decreased to 0 for more precise correction
 
-// Fraction of overlap corrected per pass (Baumgarte-style stabilization).
-// Kept below 1.0 to avoid popping; small residual overlap clears over a
-// couple of frames instead of snapping instantly.
-const CORRECTION_PERCENT = 0.4;
-
-// Slop so we don't fight floating-point noise at near-zero overlap.
-const POSITION_SLOP = 1e-4;
-
-// Tracks how many *actual* impulse collisions happened in the most recent
-// handleAllCollisions() call (not just overlap correction). engine.js's
-// getLastFrameCollisionCount() reads this via getLastCollisionCount() each
-// frame for the UI counter and the audio trigger.
 let lastCollisionCount = 0;
 
 export function getLastCollisionCount() {
   return lastCollisionCount;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 1. Geometry (2D — balls only move in the x/y swing plane, z is always 0)
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Computes the 2D collision normal and overlap depth between two balls.
- * Returns null if they aren't touching.
- */
 function getCollisionGeometry(ballA, ballB) {
   const dx = ballB.x - ballA.x;
   const dy = ballB.y - ballA.y;
@@ -49,7 +28,7 @@ function getCollisionGeometry(ballA, ballB) {
 
   let nx, ny;
   if (dist < 1e-10) {
-    nx = 1; ny = 0; // degenerate fallback
+    nx = 1; ny = 0;
   } else {
     nx = dx / dist;
     ny = dy / dist;
@@ -58,9 +37,6 @@ function getCollisionGeometry(ballA, ballB) {
   return { normal: { x: nx, y: ny }, overlap };
 }
 
-// Linear velocity vector derived from angular velocity, since
-// x = pivotX + L·sin(θ), y = pivotY - L·cos(θ)
-// => vx = L·ω·cos(θ), vy = L·ω·sin(θ)
 function getLinearVelocity(ball, L) {
   return {
     x: ball.velocity * L * Math.cos(ball.angle),
@@ -68,23 +44,10 @@ function getLinearVelocity(ball, L) {
   };
 }
 
-// Unit tangent direction of the ball's arc at its current angle —
-// used to project a 2D velocity/position delta back onto the single
-// degree of freedom (angle) each ball actually has.
 function getTangent(ball) {
   return { x: Math.cos(ball.angle), y: Math.sin(ball.angle) };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 2. Impulse-Based Resolution (mass + restitution correct for any ratio)
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Resolves a collision using impulse + reduced mass, applied along the
- * collision normal, then projects the resulting velocity back onto each
- * ball's swing-tangent to get a new angular velocity (ω).
- * Returns true if an impulse was actually applied (balls were closing).
- */
 function resolveImpulse(ballA, ballB, normal) {
   const L = CONFIG.threadLength;
   const e = CONFIG.restitution ?? 1.0;
@@ -94,8 +57,6 @@ function resolveImpulse(ballA, ballB, normal) {
 
   const vRel = (velA.x - velB.x) * normal.x + (velA.y - velB.y) * normal.y;
 
-  // Already separating along the normal — nothing to resolve. This also
-  // replaces the old isApproaching() check and avoids resting-contact jitter.
   if (vRel <= 0) return false;
 
   const m1 = ballA.mass || 1;
@@ -113,23 +74,12 @@ function resolveImpulse(ballA, ballB, normal) {
   const tA = getTangent(ballA);
   const tB = getTangent(ballB);
 
-  // v_tangential = L·ω  =>  ω = (v · t) / L
   ballA.velocity = (newVelA.x * tA.x + newVelA.y * tA.y) / L;
   ballB.velocity = (newVelB.x * tB.x + newVelB.y * tB.y) / L;
 
   return true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 3. Mass-Proportional Position Correction (angle-safe, no asin)
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Pushes overlapping balls apart, distributed by inverse mass. Instead of
- * editing ball.x directly and back-deriving angle with asin() (which loses
- * sign/breaks past 90°), this nudges ball.angle by a small increment along
- * the ball's own tangent direction — keeping it exactly on its arc.
- */
 function correctPositions(ballA, ballB, normal, overlap) {
   const L = CONFIG.threadLength;
   const m1 = ballA.mass || 1;
@@ -148,8 +98,6 @@ function correctPositions(ballA, ballB, normal, overlap) {
   const tA = getTangent(ballA);
   const tB = getTangent(ballB);
 
-  // Project the Cartesian correction onto each ball's tangent to get a
-  // small angle delta (valid since correctionMag is tiny relative to L).
   ballA.angle += (deltaA.x * tA.x + deltaA.y * tA.y) / L;
   ballB.angle += (deltaB.x * tB.x + deltaB.y * tB.y) / L;
 
@@ -158,26 +106,48 @@ function correctPositions(ballA, ballB, normal, overlap) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 4. Public Entry Point — same signature as before, called every substep
-//    by engine.js's own 120Hz loop. Do NOT add an internal SUB_STEPS loop
-//    here — engine.js already substeps integration + collisions together.
+// 4. Public Entry Point
+//
+// FIX: previously did ONE left-to-right sweep through all pairs per
+// substep. A single sweep can't propagate an impulse through more than
+// one contact per call, so hitting a resting chain of 3+ balls spread the
+// momentum across the middle balls (visible twitching) instead of
+// transferring it cleanly to the end ball — even with restitution = 1,
+// since each individual impulse was elastic but the chain never finished
+// resolving before the next integration step ran.
+//
+// Now we sweep repeatedly within the same substep until nothing collides
+// anymore (or we hit the iteration cap), so a chain reaction fully
+// resolves before gravity/integration moves on.
 // ─────────────────────────────────────────────────────────────────────────
-
 export function handleAllCollisions() {
   lastCollisionCount = 0;
 
-  for (let i = 0; i < pendulumBalls.length - 1; i++) {
-    for (let j = i + 1; j < pendulumBalls.length; j++) {
-      const ballA = pendulumBalls[i];
-      const ballB = pendulumBalls[j];
+  for (let iter = 0; iter < COLLISION.SOLVER_ITERATIONS; iter++) {
+    let anyImpulseThisIteration = false;
 
-      const geometry = getCollisionGeometry(ballA, ballB);
-      if (!geometry) continue;
+    for (let i = 0; i < pendulumBalls.length - 1; i++) {
+      for (let j = i + 1; j < pendulumBalls.length; j++) {
+        const ballA = pendulumBalls[i];
+        const ballB = pendulumBalls[j];
 
-      const applied = resolveImpulse(ballA, ballB, geometry.normal);
-      correctPositions(ballA, ballB, geometry.normal, geometry.overlap);
+        const geometry = getCollisionGeometry(ballA, ballB);
+        if (!geometry) continue;
 
-      if (applied) lastCollisionCount += 1;
+        const applied = resolveImpulse(ballA, ballB, geometry.normal);
+        correctPositions(ballA, ballB, geometry.normal, geometry.overlap);
+
+        if (applied) {
+          anyImpulseThisIteration = true;
+          // Only count real first-touch collisions once, on the first
+          // sweep — later sweeps are just resolving the same chain
+          // reaction, not new hits, so the UI counter / audio trigger
+          // shouldn't multiply-count them.
+          if (iter === 0) lastCollisionCount += 1;
+        }
+      }
     }
+
+    if (!anyImpulseThisIteration) break; // chain fully resolved, stop early
   }
 }

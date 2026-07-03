@@ -3,8 +3,8 @@ import {
   scene,
   camera,
   renderer,
-  CradleBuilder as GraphicsCradleBuilder, // Import as class
-  CradleUpdater as GraphicsCradleUpdater, // Import as class
+  CradleBuilder as GraphicsCradleBuilder,
+  CradleUpdater as GraphicsCradleUpdater,
   PhysicsBridge,
 } from "./graphics/index.js";
 import { CONFIG, computeCradleWidth } from "./constants.js";
@@ -16,23 +16,24 @@ import { CradleUpdater } from "./graphics/builders/CradleUpdater.js";
 import { TimeManager } from "./core/TimeManager.js";
 import { UIManager } from "./core/UIManager.js";
 import { AnimationController } from "./animation/AnimationController.js";
-import { StateSync } from "./animation/StateSync.js";
+import { StateSync } from "./animation/StateSync.js"; // Corrected import path
 import { AudioManager } from "./core/AudioManager.js";
 import { DragController } from "./interaction/DragController.js";
+import { KeyboardControls } from "./interaction/KeyboardControls.js"; // New import
 
-// Create a deep copy of the initial CONFIG object
+// Deep copy of the initial CONFIG, taken before anything can mutate it —
+// this is the single source of truth for what "Reset Values" restores to.
 const ORIGINAL_CONFIG = JSON.parse(JSON.stringify(CONFIG));
 
-let activeCradleGroup = null; // Initialize to null
-let activeUpdater = null; // Initialize to null
-// physicsBridge will be instantiated after rebuildCradle()
+let activeCradleGroup = null;
+let activeUpdater = null;
 const timeManager = new TimeManager();
 const audioManager = new AudioManager();
 
 const controls = new OrbitControls(camera, renderer.domElement);
 const initialCameraPosition = camera.position.clone();
 const initialControlsTarget = controls.target.clone();
-controls.target.set(0, CONFIG.supportHeight - CONFIG.threadLength, 0); // Reverted to original target
+controls.target.set(0, CONFIG.supportHeight - CONFIG.threadLength, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
@@ -49,21 +50,17 @@ function rebuildCradle() {
 
   const nextConfig = { ...physics.config };
   nextConfig.cradleWidth = computeCradleWidth(nextConfig);
-  nextConfig.spreadZ = nextConfig.cradleWidth / 5; // Make spreadZ dynamic based on cradleWidth
+  nextConfig.spreadZ = nextConfig.cradleWidth / 5;
 
-  // Use the imported CradleBuilder class
   const nextGroup = GraphicsCradleBuilder.build(nextConfig);
   scene.add(nextGroup);
   activeCradleGroup = nextGroup;
-  // Use the imported CradleUpdater class
   activeUpdater = new GraphicsCradleUpdater(nextGroup);
-  // physicsBridge.updater will be set after its instantiation
 }
 
-// Function to apply the initial angle and launch the simulation
+// Applies the initial angle and launches the simulation.
 const applyInitialMotion = () => {
   physics.applyInitialLaunchState(params.initialLaunchAngle, params.liftedBallCount);
-  // Manually update the graphics to reflect the new initial state
   activeUpdater.updateBalls(physics.getPositions());
 };
 
@@ -78,7 +75,7 @@ const params = {
   initialLaunchAngle: physics.config.initialLaunchAngle,
   liftedBallCount: physics.config.liftedBallCount,
   infiniteMotion: false,
-  dragEnabled: true, // New parameter for drag control
+  dragEnabled: true,
   reset: () => {
     physics.config.gravity = params.gravity;
     physics.config.ballCount = params.ballCount;
@@ -92,7 +89,7 @@ const params = {
         () => params.mass,
     );
     physics.config.cradleWidth = computeCradleWidth(params);
-    physics.config.spreadZ = physics.config.cradleWidth / 5; // Update spreadZ dynamically here too
+    physics.config.spreadZ = physics.config.cradleWidth / 5;
 
     if (params.infiniteMotion) {
       physics.config.restitution = 1.0;
@@ -102,13 +99,11 @@ const params = {
 
     physics.gravity = params.gravity;
     physics.infiniteMotion = params.infiniteMotion;
-    physics.reset(); // This will reset balls to angle 0, velocity 0
+    physics.reset(); // resets balls to angle 0, velocity 0
     rebuildCradle();
-    // Ensure physicsBridge.updater is updated after rebuildCradle in reset
-    if (window.physicsBridge) { // Check if it's already instantiated
+    if (window.physicsBridge) {
       window.physicsBridge.updater = activeUpdater;
     }
-    // After reset, ensure graphics are updated to show balls at rest
     activeUpdater.updateBalls(physics.getPositions());
   },
 };
@@ -116,31 +111,31 @@ const params = {
 let isPaused = false;
 let animationController = null;
 
-// Call rebuildCradle once to initialize activeCradleGroup and activeUpdater
 rebuildCradle();
 
-// Instantiate physicsBridge AFTER activeUpdater is set by rebuildCradle
 const physicsBridge = new PhysicsBridge(activeUpdater);
 
-// Instantiate DragController early so UIManager can reference it
 const dragController = new DragController(camera, renderer.domElement, () => activeCradleGroup, physics, controls);
 
-// Function to reset camera view
 const resetCamera = () => {
   camera.position.copy(initialCameraPosition);
   controls.target.copy(initialControlsTarget);
   controls.update();
 };
 
+const onPauseToggle = () => {
+  isPaused = !isPaused;
+  if (isPaused) animationController?.stop();
+  else animationController?.start();
+  // Update the pause button text in the UI
+  uiManager.pauseButton.textContent = isPaused ? "Resume" : "Pause";
+};
+
 const uiManager = new UIManager(
     () => params.reset(),
+    onPauseToggle, // Pass the shared onPauseToggle function
     () => {
-      isPaused = !isPaused;
-      if (isPaused) animationController?.stop();
-      else animationController?.start();
-    },
-    () => {
-      // Use ORIGINAL_CONFIG for defaults
+      // Restore every slider to ORIGINAL_CONFIG's values.
       const defaults = {
         gravity: ORIGINAL_CONFIG.gravity,
         restitution: ORIGINAL_CONFIG.restitution,
@@ -152,18 +147,30 @@ const uiManager = new UIManager(
         initialLaunchAngle: ORIGINAL_CONFIG.initialLaunchAngle,
         liftedBallCount: ORIGINAL_CONFIG.liftedBallCount,
         infiniteMotion: false,
-        dragEnabled: true, // Default for drag control
+        dragEnabled: true,
       };
 
       Object.assign(params, defaults);
       uiManager.setControllerValues(defaults);
       params.reset();
+
+      // FIX: params.reset() alone only leaves every ball hanging straight
+      // down at rest — it never re-applies the default launch pose. Since
+      // the cradle looks identical at rest no matter what the underlying
+      // values are, this made "Reset Values" look like it did nothing
+      // even when every slider had, in fact, been restored correctly.
+      // Re-applying the default launch state here makes the reset
+      // visually obvious.
+      applyInitialMotion();
     },
-    dragController, // Pass dragController to UIManager
-    resetCamera, // Pass resetCamera callback to UIManager
-    applyInitialMotion // Pass the new function to UIManager
+    dragController,
+    resetCamera,
+    applyInitialMotion,
 );
 uiManager.createControls(params);
+
+// Instantiate KeyboardControls
+new KeyboardControls(onPauseToggle);
 
 const stateSync = new StateSync(physicsBridge, physics);
 animationController = new AnimationController(() => {
@@ -175,6 +182,8 @@ animationController = new AnimationController(() => {
     collisions: 0,
     energyTransfer: 0,
     activeBall: 0,
+    ballVelocities: [],
+    ballAngles: [], // Ensure ballAngles is initialized
   };
   status.gravity = physics.config.gravity;
   status.restitution = physics.config.restitution;
@@ -182,7 +191,7 @@ animationController = new AnimationController(() => {
   status.ballRadius = physics.config.ballRadius;
   status.mass = physics.config.masses?.[0] ?? 1;
   status.initialLaunchAngle = physics.config.initialLaunchAngle;
-  status.liftedBallCount = status.liftedBallCount;
+  status.liftedBallCount = physics.config.liftedBallCount; // FIX: was self-assigned (status.liftedBallCount = status.liftedBallCount), a no-op that always showed undefined
   uiManager.updateStatus(status);
   controls.update();
   renderer.render(scene, camera);

@@ -80,18 +80,21 @@ export class PhysicsEngine {
 
   /**
    * Applies an initial launch angle to a specified number of balls.
-   * @param {number} angle - The angle to set for the lifted balls.
+   * @param {number} angle - The angle to set for the lifted balls (in degrees).
    * @param {number} liftedBallCount - The number of balls to lift from one side.
    */
   applyInitialLaunchState(angle, liftedBallCount) {
     // Ensure all balls are reset to hanging straight down first
     resetSystem();
 
+    // Convert angle from degrees to radians for physics calculations
+    const angleInRadians = angle * (Math.PI / 180);
+
     // Apply the initial angle to the specified number of balls
     for (let i = 0; i < pendulumBalls.length; i++) {
       const ball = pendulumBalls[i];
       if (i < liftedBallCount) {
-        ball.angle = angle;
+        ball.angle = angleInRadians; // Use the converted angle
         ball.velocity = 0; // Start from rest at the lifted angle
       } else {
         ball.angle = 0;
@@ -134,6 +137,7 @@ export class PhysicsEngine {
     // all balls was exposed, so there was no way for the chart to show
     // which individual ball(s) were actually moving.
     const ballVelocities = pendulumBalls.map((b) => b.velocity * L);
+    const ballAngles = pendulumBalls.map((b) => b.angle); // NEW: individual ball angles
 
     const averageAngle =
         pendulumBalls.reduce((sum, b) => sum + b.angle, 0) /
@@ -161,6 +165,7 @@ export class PhysicsEngine {
       collisions: this.totalCollisions,
       activeBall: activeBall >= 0 ? activeBall + 1 : 0,
       ballVelocities, // NEW — feeds UIManager's per-ball activity chart
+      ballAngles, // NEW: individual ball angles
       damping: PHYSICS.VISCOUS_K,
       gravity: this.config.gravity,
       restitution: this.config.restitution ?? 1.0,
