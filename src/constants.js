@@ -20,7 +20,7 @@ export const CONFIG = {
   initialLaunchAngle: -60, // Changed to -60 degrees
   liftedBallCount: 1,
   gravity: 9.81,
-  restitution: 1.0, // Set to 1.0 for perfectly elastic collisions
+  restitution: 0.98, // Set to 1.0 for perfectly elastic collisions
   masses: [10, 10, 10, 10, 10], // Increased default mass for all balls
   colors: {
     ball: 0xffaa00,

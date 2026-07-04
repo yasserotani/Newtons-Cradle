@@ -36,4 +36,14 @@ export class AudioManager {
     oscillator.start(this.audioCtx.currentTime);
     oscillator.stop(this.audioCtx.currentTime + 0.1);
   }
+
+  // New method to toggle sound
+  toggleMute() {
+    this.enabled = !this.enabled;
+  }
+
+  // New method to check if sound is enabled
+  isEnabled() {
+    return this.enabled;
+  }
 }

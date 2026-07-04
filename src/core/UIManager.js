@@ -3,7 +3,7 @@ import { Chart, registerables } from "chart.js";
 Chart.register(...registerables);
 
 export class UIManager {
-  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera, onApplyInitialMotion) {
+  constructor(onReset, onPauseToggle, onResetDefaults, dragController, resetCamera, onApplyInitialMotion, audioManager) {
     this.gui = new GUI();
     this.onReset = onReset;
     this.onPauseToggle = onPauseToggle;
@@ -11,6 +11,7 @@ export class UIManager {
     this.dragController = dragController;
     this.resetCamera = resetCamera;
     this.onApplyInitialMotion = onApplyInitialMotion;
+    this.audioManager = audioManager; // Store AudioManager instance
     this.panel = null;
     this.toggleButton = null;
     this.pauseButton = null;
@@ -31,6 +32,9 @@ export class UIManager {
   }
 
   createControls(params) {
+    // Initialize soundEnabled for the GUI params
+    params.soundEnabled = this.audioManager ? this.audioManager.isEnabled() : true;
+
     // Simulation Parameters Folder
     const simFolder = this.gui.addFolder("إعدادات المحاكاة");
 
@@ -140,7 +144,17 @@ export class UIManager {
           this.dragController.setEnabled(value);
         });
 
+    // Sound toggle checkbox
+    if (this.audioManager) {
+      this.controllers.soundEnabled = displayFolder
+        .add(params, "soundEnabled")
+        .name("تفعيل الصوت")
+        .onChange((value) => {
+          this.audioManager.toggleMute();
+        });
+    }
     displayFolder.add({ resetCamera: () => this.resetCamera() }, 'resetCamera').name('إعادة ضبط الكاميرا');
+
 
     displayFolder.open(); // Open display options by default
 
@@ -202,6 +216,12 @@ export class UIManager {
         this.controllers.liftedBallCount.setValue(values.ballCount);
       }
       this.controllers.liftedBallCount.updateDisplay();
+    }
+
+    // Update soundEnabled checkbox if audioManager exists
+    if ('soundEnabled' in values && this.controllers.soundEnabled && this.audioManager) {
+      this.audioManager.enabled = values.soundEnabled;
+      this.controllers.soundEnabled.setValue(values.soundEnabled);
     }
   }
 

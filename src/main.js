@@ -164,6 +164,7 @@ const uiManager = new UIManager(
     dragController,
     resetCamera,
     applyInitialMotion,
+    audioManager // Pass audioManager here
 );
 uiManager.createControls(params);
 
