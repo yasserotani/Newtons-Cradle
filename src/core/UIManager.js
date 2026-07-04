@@ -12,13 +12,19 @@ export class UIManager {
     this.resetCamera = resetCamera;
     this.onApplyInitialMotion = onApplyInitialMotion;
     this.audioManager = audioManager; // Store AudioManager instance
+
     this.panel = null;
     this.toggleButton = null;
     this.pauseButton = null;
     this.resetButton = null;
     this.visible = true;
     this.controllers = {};
-    this.chart = null;
+
+    // Separate charts state
+    this.velocityChart = null;
+    this.momentumChart = null;
+    this.energyChart = null;
+
     this.historyLength = 60;
     this.velocityHistory = Array(this.historyLength).fill(0);
     this.momentumHistory = Array(this.historyLength).fill(0);
@@ -40,14 +46,14 @@ export class UIManager {
 
     this.controllers.gravity = simFolder
         .add(params, "gravity", 1, 20, 0.01)
-        .name("الجاذبية")
+        .name("الجاذبية (m/s²)")
         .onChange((value) => {
           params.gravity = value;
           this.onReset();
         });
 
     this.controllers.restitution = simFolder
-        .add(params, "restitution", 0.1, 1.0, 0.01)
+        .add(params, "restitution", 0.00, 1.0, 0.01)
         .name("معامل الارتداد")
         .onChange((value) => {
           params.restitution = value;
@@ -100,7 +106,7 @@ export class UIManager {
 
     this.controllers.ballRadius = simFolder
         .add(params, "ballRadius", 0.2, 0.8, 0.01)
-        .name("نصف قطر الكرة")
+        .name("نصف قطر الكرة (m)")
         .onChange((value) => {
           params.ballRadius = value;
           this.onReset();
@@ -108,7 +114,7 @@ export class UIManager {
 
     this.controllers.mass = simFolder
         .add(params, "mass", 0.5, 20, 0.1)
-        .name("الكتلة")
+        .name("الكتلة (kg)")
         .onChange((value) => {
           params.mass = value;
           this.onReset();
@@ -119,7 +125,6 @@ export class UIManager {
         .name("زاوية الإطلاق الابتدائية")
         .onChange((value) => {
           params.initialLaunchAngle = value;
-          // No onReset here, as we want to apply it explicitly
         });
 
     this.controllers.liftedBallCount = simFolder
@@ -127,7 +132,6 @@ export class UIManager {
         .name("عدد الكرات المرفوعة")
         .onChange((value) => {
           params.liftedBallCount = value;
-          // No onReset here, as we want to apply it explicitly
         });
 
     // New button to apply the chosen angle
@@ -147,14 +151,13 @@ export class UIManager {
     // Sound toggle checkbox
     if (this.audioManager) {
       this.controllers.soundEnabled = displayFolder
-        .add(params, "soundEnabled")
-        .name("تفعيل الصوت")
-        .onChange((value) => {
-          this.audioManager.toggleMute();
-        });
+          .add(params, "soundEnabled")
+          .name("تفعيل الصوت")
+          .onChange((value) => {
+            this.audioManager.toggleMute();
+          });
     }
     displayFolder.add({ resetCamera: () => this.resetCamera() }, 'resetCamera').name('إعادة ضبط الكاميرا');
-
 
     displayFolder.open(); // Open display options by default
 
@@ -169,19 +172,6 @@ export class UIManager {
   }
 
   setControllerValues(values) {
-    // Bulk restore: sync every controller's DISPLAYED value only. We
-    // deliberately do NOT let each controller fire its own onChange here.
-    // Each onChange also triggers a full physics reset, so calling all of
-    // them back-to-back used to mean up to ~7 redundant resets per click,
-    // and — worse — a real bug: `restitution`'s onChange ran before
-    // `infiniteMotion`'s (object key order), so if Infinite Motion had
-    // been left on, restitution's handler didn't know infiniteMotion was
-    // about to turn off and skipped refreshing `_previousRestitution`.
-    // infiniteMotion's handler then immediately overwrote the correctly
-    // reset restitution value with that stale cached number — restitution
-    // silently failed to reset whenever Infinite Motion had been toggled
-    // on. The caller already does one authoritative params.reset() right
-    // after this call, so no controller needs to trigger physics here.
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
@@ -189,9 +179,6 @@ export class UIManager {
       }
     });
 
-    // Keep restitution's "what to restore when infinite motion turns
-    // off" baseline in sync with the values actually being restored,
-    // instead of whatever was cached from before this reset.
     if ('restitution' in values) {
       this._previousRestitution = values.restitution;
     }
@@ -208,7 +195,6 @@ export class UIManager {
       this.dragController.setEnabled(values.dragEnabled);
     }
 
-    // After setting ballCount, update liftedBallCount's max
     if ('ballCount' in values && this.controllers.liftedBallCount) {
       this.controllers.liftedBallCount.max(values.ballCount);
       if (params.liftedBallCount > values.ballCount) {
@@ -218,7 +204,6 @@ export class UIManager {
       this.controllers.liftedBallCount.updateDisplay();
     }
 
-    // Update soundEnabled checkbox if audioManager exists
     if ('soundEnabled' in values && this.controllers.soundEnabled && this.audioManager) {
       this.audioManager.enabled = values.soundEnabled;
       this.controllers.soundEnabled.setValue(values.soundEnabled);
@@ -247,6 +232,8 @@ export class UIManager {
     this.panel.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.28)";
     this.panel.style.backdropFilter = "blur(10px)";
     this.panel.style.border = "1px solid rgba(148, 163, 184, 0.28)";
+    this.panel.style.maxHeight = "90vh"; // Safety bound if screen is small
+    this.panel.style.overflowY = "auto"; // Scrollable if needed
 
     const titleRow = document.createElement("div");
     titleRow.style.display = "flex";
@@ -263,22 +250,41 @@ export class UIManager {
     this.statusContent = document.createElement("div");
     this.panel.appendChild(this.statusContent);
 
-    const chartWrap = document.createElement("div");
-    chartWrap.style.position = "relative";
-    chartWrap.style.height = "110px";
-    chartWrap.style.marginTop = "10px";
-    chartWrap.style.borderRadius = "8px";
-    chartWrap.style.overflow = "hidden";
-    chartWrap.style.background = "rgba(15, 23, 42, 0.55)";
+    // --- Helper to create individual small charts ---
+    const createMiniChartWrap = (titleText) => {
+      const wrap = document.createElement("div");
+      wrap.style.position = "relative";
+      wrap.style.height = "50px"; // Smaller height for individual charts (changed from 65px)
+      wrap.style.marginTop = "8px";
+      wrap.style.borderRadius = "8px";
+      wrap.style.overflow = "hidden";
+      wrap.style.background = "rgba(15, 23, 42, 0.55)";
 
-    this.graphCanvas = document.createElement("canvas");
-    chartWrap.appendChild(this.graphCanvas);
-    this.panel.appendChild(chartWrap);
+      const label = document.createElement("div");
+      label.textContent = titleText;
+      label.style.position = "absolute";
+      label.style.top = "4px";
+      label.style.right = "8px"; // RTL alignment
+      label.style.fontSize = "10px";
+      label.style.color = "#94a3b8";
+      label.style.zIndex = "10";
+      label.style.pointerEvents = "none";
+      wrap.appendChild(label);
 
-    this._initChart();
+      const canvas = document.createElement("canvas");
+      wrap.appendChild(canvas);
+      this.panel.appendChild(wrap);
+      return canvas;
+    };
 
-    // small label + canvas for the per-ball activity chart, so you
-    // can see at a glance which ball(s) are actually swinging right now.
+    // Create 3 independent canvases
+    this.velocityCanvas = createMiniChartWrap("السرعة (m/s)");
+    this.momentumCanvas = createMiniChartWrap("الزخم (kg·m/s)");
+    this.energyCanvas = createMiniChartWrap("الطاقة الكلية (J)");
+
+    this._initCharts(); // Initialize the 3 charts
+
+    // Bar chart for individual ball activity
     const ballChartLabel = document.createElement("div");
     ballChartLabel.textContent = "نشاط الكرات";
     ballChartLabel.style.fontSize = "11px";
@@ -288,7 +294,7 @@ export class UIManager {
 
     const ballChartWrap = document.createElement("div");
     ballChartWrap.style.position = "relative";
-    ballChartWrap.style.height = "70px";
+    ballChartWrap.style.height = "50px"; // Smaller height for ball activity chart (changed from 70px)
     ballChartWrap.style.borderRadius = "8px";
     ballChartWrap.style.overflow = "hidden";
     ballChartWrap.style.background = "rgba(15, 23, 42, 0.55)";
@@ -341,87 +347,63 @@ export class UIManager {
     this.panelWrapper.appendChild(this.panel);
   }
 
-  _initChart() {
+  _initCharts() {
     const labels = Array.from({ length: this.historyLength }, (_, i) => i);
 
-    this.chart = new Chart(this.graphCanvas, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "السرعة",
-            data: [...this.velocityHistory],
-            borderColor: "#38bdf8",
-            backgroundColor: "rgba(56,189,248,0.12)",
+    // Generic function to create individual line charts
+    const createLineChart = (canvas, dataArray, borderColor, bgColor) => {
+      return new Chart(canvas, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            data: [...dataArray],
+            borderColor: borderColor,
+            backgroundColor: bgColor,
             borderWidth: 1.5,
             pointRadius: 0,
             fill: true,
             tension: 0.35,
+          }],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: {
+            padding: { top: 20 } // Space for the absolute title
           },
-          {
-            label: "الزخم",
-            data: [...this.momentumHistory],
-            borderColor: "#34d399",
-            backgroundColor: "rgba(52,211,153,0.08)",
-            borderWidth: 1.5,
-            pointRadius: 0,
-            fill: true,
-            tension: 0.35,
-          },
-          {
-            label: "الطاقة الكلية",
-            data: [...this.energyHistory],
-            borderColor: "#f472b6",
-            backgroundColor: "rgba(244,114,182,0.08)",
-            borderWidth: 1.5,
-            pointRadius: 0,
-            fill: true,
-            tension: 0.35,
-          },
-        ],
-      },
-      options: {
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: true,
-            labels: {
-              color: "#94a3b8",
-              boxWidth: 10,
-              font: { size: 10 },
-              padding: 8,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(10,18,32,0.9)",
+              titleColor: "#94a3b8",
+              bodyColor: "#e2e8f0",
+              borderColor: "rgba(148,163,184,0.2)",
+              borderWidth: 1,
             },
           },
-          tooltip: {
-            backgroundColor: "rgba(10,18,32,0.9)",
-            titleColor: "#94a3b8",
-            bodyColor: "#e2e8f0",
-            borderColor: "rgba(148,163,184,0.2)",
-            borderWidth: 1,
-          },
-        },
-        scales: {
-          x: { display: false },
-          y: {
-            display: true,
-            grid: { color: "rgba(148,163,184,0.08)" },
-            ticks: {
-              color: "#475569",
-              font: { size: 10 },
-              maxTicksLimit: 4,
+          scales: {
+            x: { display: false },
+            y: {
+              display: true,
+              grid: { color: "rgba(148,163,184,0.08)" },
+              ticks: {
+                color: "#475569",
+                font: { size: 9 },
+                maxTicksLimit: 3, // Keep the Y-axis clean
+              },
             },
           },
         },
-      },
-    });
+      });
+    };
+
+    this.velocityChart = createLineChart(this.velocityCanvas, this.velocityHistory, "#38bdf8", "rgba(56,189,248,0.12)");
+    this.momentumChart = createLineChart(this.momentumCanvas, this.momentumHistory, "#34d399", "rgba(52,211,153,0.08)");
+    this.energyChart = createLineChart(this.energyCanvas, this.energyHistory, "#f472b6", "rgba(244,114,182,0.08)");
   }
 
-  // bar chart with one bar per ball. Rebuilt whenever ball count
-  // changes (since Chart.js can't cleanly resize a dataset's category
-  // axis in place).
   _initBallChart(count) {
     if (this.ballChart) {
       this.ballChart.destroy();
@@ -434,7 +416,7 @@ export class UIManager {
         labels,
         datasets: [
           {
-            label: "|السرعة| (م/ث)",
+            label: "|السرعة| (m/s)",
             data: Array(count).fill(0),
             backgroundColor: Array(count).fill("#334155"),
             borderRadius: 4,
@@ -486,15 +468,12 @@ export class UIManager {
     const energyTransfer = state.energyTransfer ?? 0;
     const collisions = state.collisions ?? 0;
     const ballVelocities = state.ballVelocities ?? [];
-    const ballAngles = state.ballAngles ?? []; // per-ball angles, if PhysicsEngine.getStatus() provides them
+    const ballAngles = state.ballAngles ?? [];
 
     this._push(this.velocityHistory, velocity);
     this._push(this.momentumHistory, momentum);
     this._push(this.energyHistory, totalEnergy);
 
-    // keep the per-ball chart in sync (rebuild only if ball count
-    // changed) and color each bar based on whether that ball is actually
-    // moving right now.
     if (ballVelocities.length) {
       if (!this.ballChart || this._ballChartCount !== ballVelocities.length) {
         this._initBallChart(ballVelocities.length);
@@ -511,18 +490,14 @@ export class UIManager {
         .map((v, i) => (Math.abs(v) > this.ballMoveThreshold ? i + 1 : null))
         .filter((n) => n !== null);
 
-    // Only real, dynamically-computed physics quantities here — config
-    // values (gravity, restitution, ball count, etc.) are already visible
-    // and editable in the GUI sliders above, so showing them again here
-    // added nothing.
     let metricRows = [
-      { label: "السرعة (م/ث)", value: velocity.toFixed(3), color: "#38bdf8" },
-      { label: "الزخم (كجم·م/ث)", value: momentum.toFixed(3), color: "#34d399" },
-      { label: "الطاقة الحركية (ج)", value: kineticEnergy.toFixed(3), color: "#60a5fa" },
-      { label: "طاقة الوضع (ج)", value: potentialEnergy.toFixed(3), color: "#fbbf24" },
-      { label: "الطاقة الكلية (ج)", value: totalEnergy.toFixed(3), color: "#f472b6" },
+      { label: "السرعة (m/s)", value: velocity.toFixed(3), color: "#38bdf8" },
+      { label: "الزخم (kg·m/s)", value: momentum.toFixed(3), color: "#34d399" },
+      { label: "الطاقة الحركية (J)", value: kineticEnergy.toFixed(3), color: "#60a5fa" },
+      { label: "طاقة الوضع (J)", value: potentialEnergy.toFixed(3), color: "#fbbf24" },
+      { label: "الطاقة الكلية (J)", value: totalEnergy.toFixed(3), color: "#f472b6" },
       {
-        label: "الطاقة المفقودة (هذا الإطار)",
+        label: "الطاقة المفقودة",
         value: energyTransfer.toFixed(4),
         color: "#fb7185",
       },
@@ -534,10 +509,9 @@ export class UIManager {
       },
     ];
 
-    // Add individual ball angles
     ballAngles.forEach((angle, index) => {
       metricRows.push({
-        label: `زاوية الكرة ${index + 1} (درجة)`,
+        label: `زاوية الكرة ${index + 1}`,
         value: (angle * (180 / Math.PI)).toFixed(3),
         color: "#f9a8d4",
       });
@@ -554,7 +528,7 @@ export class UIManager {
         )
         .join("");
 
-    this._updateChart();
+    this._updateCharts(); // Call the separated charts update
   }
 
   _push(arr, value) {
@@ -562,11 +536,18 @@ export class UIManager {
     if (arr.length > this.historyLength) arr.shift();
   }
 
-  _updateChart() {
-    if (!this.chart) return;
-    this.chart.data.datasets[0].data = [...this.velocityHistory];
-    this.chart.data.datasets[1].data = [...this.momentumHistory];
-    this.chart.data.datasets[2].data = [...this.energyHistory];
-    this.chart.update("none");
+  _updateCharts() {
+    if (this.velocityChart) {
+      this.velocityChart.data.datasets[0].data = [...this.velocityHistory];
+      this.velocityChart.update("none");
+    }
+    if (this.momentumChart) {
+      this.momentumChart.data.datasets[0].data = [...this.momentumHistory];
+      this.momentumChart.update("none");
+    }
+    if (this.energyChart) {
+      this.energyChart.data.datasets[0].data = [...this.energyHistory];
+      this.energyChart.update("none");
+    }
   }
 }

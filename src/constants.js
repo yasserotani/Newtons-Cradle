@@ -2,7 +2,7 @@
 
 export const PHYSICS = {
   FIXED_DT: 1 / 480, // Reduced to improve numerical integration accuracy and minimize energy loss
-  VISCOUS_K: 0.001, // angular-velocity-proportional damping, reduced to minimize energy loss
+  VISCOUS_K: 0.1, // angular-velocity-proportional damping, reduced to minimize energy loss
 };
 
 export const COLLISION = {
@@ -20,7 +20,7 @@ export const CONFIG = {
   initialLaunchAngle: -60, // Changed to -60 degrees
   liftedBallCount: 1,
   gravity: 9.81,
-  restitution: 0.98, // Set to 1.0 for perfectly elastic collisions
+  restitution: 0.99, // Set to 1.0 for perfectly elastic collisions
   masses: [10, 10, 10, 10, 10], // Increased default mass for all balls
   colors: {
     ball: 0xffaa00,
