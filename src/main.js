@@ -11,8 +11,6 @@ import { CONFIG, computeCradleWidth } from "./constants.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PhysicsEngine } from "./physics/PhysicsEngine.js";
-import { CradleBuilder } from "./graphics/builders/CradleBuilder.js";
-import { CradleUpdater } from "./graphics/builders/CradleUpdater.js";
 import { TimeManager } from "./core/TimeManager.js";
 import { UIManager } from "./core/UIManager.js";
 import { AnimationController } from "./animation/AnimationController.js";

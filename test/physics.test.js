@@ -58,3 +58,17 @@ test("physics engine does not transfer momentum before actual contact", () => {
   assert.equal(engine.balls[0].angularVelocity > 0, true);
   assert.equal(engine.balls[1].angularVelocity, 0);
 });
+
+test("physics engine allows large drag angles", () => {
+  const engine = new PhysicsEngine({
+    ballCount: 2,
+    cradleWidth: 3.2,
+    supportHeight: 3.0,
+    threadLength: 2.0,
+    ballRadius: 0.4,
+  });
+
+  engine.setBallAngle(0, 2.09);
+
+  assert.equal(engine.balls[0].angle, 2.09);
+});

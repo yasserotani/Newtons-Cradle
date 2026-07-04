@@ -1,5 +1,4 @@
 // src/graphics/builders/CradleUpdater.js
-import * as THREE from 'three';
 
 export class CradleUpdater {
     constructor(group) {

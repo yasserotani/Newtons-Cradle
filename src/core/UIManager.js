@@ -24,7 +24,7 @@ export class UIManager {
     this.energyHistory = Array(this.historyLength).fill(0);
     this._previousRestitution = 1.0;
 
-    // NEW — per-ball "who's moving" bar chart state
+    // per-ball "who's moving" bar chart state
     this.ballChart = null;
     this._ballChartCount = 0;
     this.ballMoveThreshold = 0.02; // m/s — below this a ball counts as "at rest" for highlighting
@@ -32,10 +32,11 @@ export class UIManager {
 
   createControls(params) {
     // Simulation Parameters Folder
-    const simFolder = this.gui.addFolder("Simulation Parameters");
+    const simFolder = this.gui.addFolder("إعدادات المحاكاة");
 
     this.controllers.gravity = simFolder
         .add(params, "gravity", 1, 20, 0.01)
+        .name("الجاذبية")
         .onChange((value) => {
           params.gravity = value;
           this.onReset();
@@ -43,6 +44,7 @@ export class UIManager {
 
     this.controllers.restitution = simFolder
         .add(params, "restitution", 0.1, 1.0, 0.01)
+        .name("معامل الارتداد")
         .onChange((value) => {
           params.restitution = value;
           if (!params.infiniteMotion) {
@@ -53,7 +55,7 @@ export class UIManager {
 
     this.controllers.infiniteMotion = simFolder
         .add(params, "infiniteMotion")
-        .name("Infinite Motion (No Damping)")
+        .name("حركة لا نهائية (بدون تخميد)")
         .onChange((value) => {
           if (value) {
             this._previousRestitution = params.restitution;
@@ -70,29 +72,39 @@ export class UIManager {
 
     this.controllers.ballCount = simFolder
         .add(params, "ballCount", {
-          "1   balls": 1,
-          "2 balls": 2,
-          "3 balls": 3,
-          "4 balls": 4,
-          "5 balls": 5,
-          "6 balls": 6,
-          "7 balls": 7,
-          "8 balls": 8,
+          "1 كرة": 1,
+          "2 كرة": 2,
+          "3 كرات": 3,
+          "4 كرات": 4,
+          "5 كرات": 5,
+          "6 كرات": 6,
+          "7 كرات": 7,
+          "8 كرات": 8,
         })
+        .name("عدد الكرات")
         .onChange((value) => {
           params.ballCount = value;
           this.onReset();
+          // Update max for liftedBallCount
+          this.controllers.liftedBallCount.max(value);
+          if (params.liftedBallCount > value) {
+            params.liftedBallCount = value;
+            this.controllers.liftedBallCount.setValue(value);
+          }
+          this.controllers.liftedBallCount.updateDisplay();
         });
 
     this.controllers.ballRadius = simFolder
         .add(params, "ballRadius", 0.2, 0.8, 0.01)
+        .name("نصف قطر الكرة")
         .onChange((value) => {
           params.ballRadius = value;
           this.onReset();
         });
 
     this.controllers.mass = simFolder
-        .add(params, "mass", 0.5, 5, 0.1)
+        .add(params, "mass", 0.5, 20, 0.1)
+        .name("الكتلة")
         .onChange((value) => {
           params.mass = value;
           this.onReset();
@@ -100,37 +112,39 @@ export class UIManager {
 
     this.controllers.initialLaunchAngle = simFolder
         .add(params, "initialLaunchAngle", -120, 0, 0.01)
+        .name("زاوية الإطلاق الابتدائية")
         .onChange((value) => {
           params.initialLaunchAngle = value;
           // No onReset here, as we want to apply it explicitly
         });
 
     this.controllers.liftedBallCount = simFolder
-        .add(params, "liftedBallCount", 1, 4, 1)
+        .add(params, "liftedBallCount", 1, params.ballCount, 1) // Set max dynamically
+        .name("عدد الكرات المرفوعة")
         .onChange((value) => {
           params.liftedBallCount = value;
           // No onReset here, as we want to apply it explicitly
         });
 
     // New button to apply the chosen angle
-    simFolder.add({ applyAngle: () => this.onApplyInitialMotion() }, 'applyAngle').name('Apply Angle & Launch');
+    simFolder.add({ applyAngle: () => this.onApplyInitialMotion() }, 'applyAngle').name('تطبيق الزاوية والإطلاق');
 
     simFolder.open(); // Open simulation parameters by default
 
     // Display Options Folder
-    const displayFolder = this.gui.addFolder("Display Options");
+    const displayFolder = this.gui.addFolder("خيارات العرض");
     this.controllers.dragEnabled = displayFolder
         .add(params, "dragEnabled")
-        .name("Enable Ball Drag")
+        .name("تفعيل سحب الكرة")
         .onChange((value) => {
           this.dragController.setEnabled(value);
         });
 
-    displayFolder.add({ resetCamera: () => this.resetCamera() }, 'resetCamera').name('Reset Camera View');
+    displayFolder.add({ resetCamera: () => this.resetCamera() }, 'resetCamera').name('إعادة ضبط الكاميرا');
 
     displayFolder.open(); // Open display options by default
 
-    this.gui.add(params, "reset").name("Reset Simulation");
+    this.gui.add(params, "reset").name("إعادة تشغيل المحاكاة");
 
     this.createStatusPanel();
 
@@ -179,6 +193,16 @@ export class UIManager {
     if ('dragEnabled' in values) {
       this.dragController.setEnabled(values.dragEnabled);
     }
+
+    // After setting ballCount, update liftedBallCount's max
+    if ('ballCount' in values && this.controllers.liftedBallCount) {
+      this.controllers.liftedBallCount.max(values.ballCount);
+      if (params.liftedBallCount > values.ballCount) {
+        params.liftedBallCount = values.ballCount;
+        this.controllers.liftedBallCount.setValue(values.ballCount);
+      }
+      this.controllers.liftedBallCount.updateDisplay();
+    }
   }
 
   createStatusPanel() {
@@ -211,7 +235,7 @@ export class UIManager {
     titleRow.style.marginBottom = "8px";
 
     const title = document.createElement("div");
-    title.textContent = "Physics Status";
+    title.textContent = "حالة الفيزياء";
     title.style.fontWeight = "700";
     titleRow.appendChild(title);
     this.panel.appendChild(titleRow);
@@ -233,10 +257,10 @@ export class UIManager {
 
     this._initChart();
 
-    // NEW — small label + canvas for the per-ball activity chart, so you
+    // small label + canvas for the per-ball activity chart, so you
     // can see at a glance which ball(s) are actually swinging right now.
     const ballChartLabel = document.createElement("div");
-    ballChartLabel.textContent = "Ball Activity";
+    ballChartLabel.textContent = "نشاط الكرات";
     ballChartLabel.style.fontSize = "11px";
     ballChartLabel.style.color = "#94a3b8";
     ballChartLabel.style.margin = "10px 0 4px";
@@ -261,7 +285,7 @@ export class UIManager {
     buttonRow.style.flexWrap = "wrap";
 
     this.toggleButton = document.createElement("button");
-    this.toggleButton.textContent = "Hide Status";
+    this.toggleButton.textContent = "إخفاء الحالة";
     this.toggleButton.style.padding = "8px 10px";
     this.toggleButton.style.borderRadius = "999px";
     this.toggleButton.style.border = "none";
@@ -271,7 +295,7 @@ export class UIManager {
     this.toggleButton.addEventListener("click", () => this.togglePanel());
 
     this.pauseButton = document.createElement("button");
-    this.pauseButton.textContent = "Pause";
+    this.pauseButton.textContent = "إيقاف مؤقت";
     this.pauseButton.style.padding = "8px 10px";
     this.pauseButton.style.borderRadius = "999px";
     this.pauseButton.style.border = "none";
@@ -281,7 +305,7 @@ export class UIManager {
     this.pauseButton.addEventListener("click", () => this.onPauseToggle?.());
 
     this.resetButton = document.createElement("button");
-    this.resetButton.textContent = "Reset Values";
+    this.resetButton.textContent = "إعادة ضبط القيم";
     this.resetButton.style.padding = "8px 10px";
     this.resetButton.style.borderRadius = "999px";
     this.resetButton.style.border = "none";
@@ -306,7 +330,7 @@ export class UIManager {
         labels,
         datasets: [
           {
-            label: "Velocity",
+            label: "السرعة",
             data: [...this.velocityHistory],
             borderColor: "#38bdf8",
             backgroundColor: "rgba(56,189,248,0.12)",
@@ -316,7 +340,7 @@ export class UIManager {
             tension: 0.35,
           },
           {
-            label: "Momentum",
+            label: "الزخم",
             data: [...this.momentumHistory],
             borderColor: "#34d399",
             backgroundColor: "rgba(52,211,153,0.08)",
@@ -326,7 +350,7 @@ export class UIManager {
             tension: 0.35,
           },
           {
-            label: "Total Energy",
+            label: "الطاقة الكلية",
             data: [...this.energyHistory],
             borderColor: "#f472b6",
             backgroundColor: "rgba(244,114,182,0.08)",
@@ -375,14 +399,14 @@ export class UIManager {
     });
   }
 
-  // NEW — bar chart with one bar per ball. Rebuilt whenever ball count
+  // bar chart with one bar per ball. Rebuilt whenever ball count
   // changes (since Chart.js can't cleanly resize a dataset's category
   // axis in place).
   _initBallChart(count) {
     if (this.ballChart) {
       this.ballChart.destroy();
     }
-    const labels = Array.from({ length: count }, (_, i) => `Ball ${i + 1}`);
+    const labels = Array.from({ length: count }, (_, i) => `كرة ${i + 1}`);
 
     this.ballChart = new Chart(this.ballActivityCanvas, {
       type: "bar",
@@ -390,7 +414,7 @@ export class UIManager {
         labels,
         datasets: [
           {
-            label: "|velocity| (m/s)",
+            label: "|السرعة| (م/ث)",
             data: Array(count).fill(0),
             backgroundColor: Array(count).fill("#334155"),
             borderRadius: 4,
@@ -427,8 +451,8 @@ export class UIManager {
     this.visible = !this.visible;
     this.panel.style.display = this.visible ? "block" : "none";
     this.toggleButton.textContent = this.visible
-        ? "Hide Status"
-        : "Show Status";
+        ? "إخفاء الحالة"
+        : "إظهار الحالة";
   }
 
   updateStatus(state) {
@@ -441,14 +465,14 @@ export class UIManager {
     const totalEnergy = state.totalEnergy ?? 0;
     const energyTransfer = state.energyTransfer ?? 0;
     const collisions = state.collisions ?? 0;
-    const ballVelocities = state.ballVelocities ?? []; // NEW
-    const ballAngles = state.ballAngles ?? []; // NEW: Get individual ball angles
+    const ballVelocities = state.ballVelocities ?? [];
+    const ballAngles = state.ballAngles ?? []; // per-ball angles, if PhysicsEngine.getStatus() provides them
 
     this._push(this.velocityHistory, velocity);
     this._push(this.momentumHistory, momentum);
     this._push(this.energyHistory, totalEnergy);
 
-    // NEW — keep the per-ball chart in sync (rebuild only if ball count
+    // keep the per-ball chart in sync (rebuild only if ball count
     // changed) and color each bar based on whether that ball is actually
     // moving right now.
     if (ballVelocities.length) {
@@ -472,19 +496,19 @@ export class UIManager {
     // and editable in the GUI sliders above, so showing them again here
     // added nothing.
     let metricRows = [
-      { label: "Velocity (m/s)", value: velocity.toFixed(3), color: "#38bdf8" },
-      { label: "Momentum (kg·m/s)", value: momentum.toFixed(3), color: "#34d399" },
-      { label: "Kinetic Energy (J)", value: kineticEnergy.toFixed(3), color: "#60a5fa" },
-      { label: "Potential Energy (J)", value: potentialEnergy.toFixed(3), color: "#fbbf24" },
-      { label: "Total Energy (J)", value: totalEnergy.toFixed(3), color: "#f472b6" },
+      { label: "السرعة (م/ث)", value: velocity.toFixed(3), color: "#38bdf8" },
+      { label: "الزخم (كجم·م/ث)", value: momentum.toFixed(3), color: "#34d399" },
+      { label: "الطاقة الحركية (ج)", value: kineticEnergy.toFixed(3), color: "#60a5fa" },
+      { label: "طاقة الوضع (ج)", value: potentialEnergy.toFixed(3), color: "#fbbf24" },
+      { label: "الطاقة الكلية (ج)", value: totalEnergy.toFixed(3), color: "#f472b6" },
       {
-        label: "Energy Lost (this frame)",
+        label: "الطاقة المفقودة (هذا الإطار)",
         value: energyTransfer.toFixed(4),
         color: "#fb7185",
       },
-      { label: "Collisions", value: collisions, color: "#f59e0b" },
+      { label: "التصادمات", value: collisions, color: "#f59e0b" },
       {
-        label: "Moving Ball(s)", // NEW
+        label: "الكرات المتحركة",
         value: movingBalls.length ? movingBalls.join(", ") : "—",
         color: "#38bdf8",
       },
@@ -493,14 +517,11 @@ export class UIManager {
     // Add individual ball angles
     ballAngles.forEach((angle, index) => {
       metricRows.push({
-        label: `Ball ${index + 1} Angle (deg)`,
+        label: `زاوية الكرة ${index + 1} (درجة)`,
         value: (angle * (180 / Math.PI)).toFixed(3),
         color: "#f9a8d4",
       });
     });
-
-    // Remove average angle and average angular velocity
-    // metricRows = metricRows.filter(row => !row.label.startsWith("Avg Angle") && !row.label.startsWith("Avg Angular Velocity"));
 
     this.statusContent.innerHTML = metricRows
         .map(

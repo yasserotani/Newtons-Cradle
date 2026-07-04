@@ -3,14 +3,10 @@
 // Exists so main.js can keep using `new PhysicsEngine(config)` / .update() /
 // .getPositions() / .getStatus() / .reset() exactly as before.
 
-import {
-  pendulumBalls,
-  initPhysicsSystem,
-  resetSystem,
-} from "./state.js";
-import { updateAllPendulums, getTotalSystemEnergy, updateCartesianCoordinates } from "./motion.js";
-import { handleAllCollisions, getLastCollisionCount } from "./collision.js";
-import { CONFIG, PHYSICS } from "../constants.js";
+import {initPhysicsSystem, pendulumBalls, resetSystem} from "./state.js";
+import {getTotalSystemEnergy, updateAllPendulums, updateCartesianCoordinates,} from "./motion.js";
+import {getLastCollisionCount, handleAllCollisions} from "./collision.js";
+import {CONFIG, PHYSICS} from "../constants.js";
 
 export class PhysicsEngine {
   constructor(config) {
@@ -68,9 +64,10 @@ export class PhysicsEngine {
       const ball = pendulumBalls[index];
       // Clamp angle to a reasonable range to prevent visual glitches
       const MAX_DRAG_ANGLE = 1.4; // Approximately 80 degrees
-      const clampedAngle = Math.max(-MAX_DRAG_ANGLE, Math.min(MAX_DRAG_ANGLE, angle));
-
-      ball.angle = clampedAngle;
+      ball.angle = Math.max(
+          -MAX_DRAG_ANGLE,
+          Math.min(MAX_DRAG_ANGLE, angle),
+      );
       ball.velocity = 0; // Held ball has no velocity
 
       // Update Cartesian coordinates to reflect the new angle
@@ -121,15 +118,15 @@ export class PhysicsEngine {
     // v = ω·L (paper page 5) — linear velocity, in m/s, not raw angular
     // velocity.
     const velocity = pendulumBalls.reduce(
-        (sum, b) => sum + Math.abs(b.velocity) * L,
-        0,
+      (sum, b) => sum + Math.abs(b.velocity) * L,
+      0,
     );
     const momentum = pendulumBalls.reduce(
-        (sum, b) => sum + (b.mass || 1) * Math.abs(b.velocity) * L,
-        0,
+      (sum, b) => sum + (b.mass || 1) * Math.abs(b.velocity) * L,
+      0,
     );
     const activeBall = pendulumBalls.findIndex(
-        (b) => Math.abs(b.velocity) > 0.001,
+      (b) => Math.abs(b.velocity) > 0.001,
     );
 
     // NEW: per-ball linear velocity (signed, m/s). This is what was
@@ -140,11 +137,10 @@ export class PhysicsEngine {
     const ballAngles = pendulumBalls.map((b) => b.angle); // NEW: individual ball angles
 
     const averageAngle =
-        pendulumBalls.reduce((sum, b) => sum + b.angle, 0) /
-        pendulumBalls.length;
+      pendulumBalls.reduce((sum, b) => sum + b.angle, 0) / pendulumBalls.length;
     const averageAngularVelocity =
-        pendulumBalls.reduce((sum, b) => sum + b.velocity, 0) /
-        pendulumBalls.length;
+      pendulumBalls.reduce((sum, b) => sum + b.velocity, 0) /
+      pendulumBalls.length;
 
     const { K, U, E } = getTotalSystemEnergy();
 

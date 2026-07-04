@@ -21,7 +21,7 @@ export const CONFIG = {
   liftedBallCount: 1,
   gravity: 9.81,
   restitution: 1.0, // Set to 1.0 for perfectly elastic collisions
-  masses: [1, 1, 1, 1, 1],
+  masses: [10, 10, 10, 10, 10], // Increased default mass for all balls
   colors: {
     ball: 0xffaa00,
     thread: 0xcccccc,
@@ -51,6 +51,6 @@ export const PENDULUM = {
 // (angle = 0 means cartesian spacing == pivot spacing).
 export function computeCradleWidth(config) {
   return config.ballCount > 1
-      ? 2 * config.ballRadius * (config.ballCount - 1)
-      : 0;
+    ? 2 * config.ballRadius * (config.ballCount - 1)
+    : 0;
 }
