@@ -69,7 +69,7 @@ const params = {
   ballRadius: physics.config.ballRadius,
   threadLength: physics.config.threadLength,
   supportHeight: physics.config.supportHeight,
-  mass: physics.config.masses?.[0] ?? 1,
+  masses: [...physics.config.masses], // Now an array for individual masses
   initialLaunchAngle: physics.config.initialLaunchAngle,
   liftedBallCount: physics.config.liftedBallCount,
   infiniteMotion: false,
@@ -82,10 +82,8 @@ const params = {
     physics.config.supportHeight = params.supportHeight;
     physics.config.initialLaunchAngle = params.initialLaunchAngle;
     physics.config.liftedBallCount = params.liftedBallCount;
-    physics.config.masses = Array.from(
-        { length: params.ballCount },
-        () => params.mass,
-    );
+    physics.config.masses = [...params.masses]; // Update physics engine with individual masses
+
     physics.config.cradleWidth = computeCradleWidth(params);
     physics.config.spreadZ = physics.config.cradleWidth / 5;
 
@@ -141,7 +139,7 @@ const uiManager = new UIManager(
         ballRadius: ORIGINAL_CONFIG.ballRadius,
         threadLength: ORIGINAL_CONFIG.threadLength,
         supportHeight: ORIGINAL_CONFIG.supportHeight,
-        mass: ORIGINAL_CONFIG.masses?.[0] ?? 1,
+        masses: [...ORIGINAL_CONFIG.masses], // Restore masses array
         initialLaunchAngle: ORIGINAL_CONFIG.initialLaunchAngle,
         liftedBallCount: ORIGINAL_CONFIG.liftedBallCount,
         infiniteMotion: false,
@@ -149,6 +147,8 @@ const uiManager = new UIManager(
       };
 
       Object.assign(params, defaults);
+      params.masses = [...defaults.masses]; // Explicitly update params.masses
+
       uiManager.setControllerValues(defaults);
       params.reset();
 
@@ -188,7 +188,7 @@ animationController = new AnimationController(() => {
   status.restitution = physics.config.restitution;
   status.ballCount = physics.config.ballCount;
   status.ballRadius = physics.config.ballRadius;
-  status.mass = physics.config.masses?.[0] ?? 1;
+  // Removed status.mass as it's no longer a single value
   status.initialLaunchAngle = physics.config.initialLaunchAngle;
   status.liftedBallCount = physics.config.liftedBallCount; // FIX: was self-assigned (status.liftedBallCount = status.liftedBallCount), a no-op that always showed undefined
   uiManager.updateStatus(status);

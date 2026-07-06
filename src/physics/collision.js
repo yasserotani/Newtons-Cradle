@@ -7,8 +7,8 @@ import { pendulumBalls } from "./state.js";
 import { COLLISION, CONFIG } from "../constants.js";
 import { updateCartesianCoordinates } from "./motion.js";
 
-const CORRECTION_PERCENT = 1.0; // Increased to 1.0 for more aggressive correction
-const POSITION_SLOP = 0; // Decreased to 0 for more precise correction
+const CORRECTION_PERCENT = 0.2; // Reverted to a more typical value
+const POSITION_SLOP = 0.01; // Reverted to a more typical value
 
 let lastCollisionCount = 0;
 
@@ -122,6 +122,7 @@ function correctPositions(ballA, ballB, normal, overlap) {
 // ─────────────────────────────────────────────────────────────────────────
 export function handleAllCollisions() {
   lastCollisionCount = 0;
+  const collidedThisFrame = new Set(); // Track unique balls
 
   for (let iter = 0; iter < COLLISION.SOLVER_ITERATIONS; iter++) {
     let anyImpulseThisIteration = false;
@@ -139,15 +140,15 @@ export function handleAllCollisions() {
 
         if (applied) {
           anyImpulseThisIteration = true;
-          // Only count real first-touch collisions once, on the first
-          // sweep — later sweeps are just resolving the same chain
-          // reaction, not new hits, so the UI counter / audio trigger
-          // shouldn't multiply-count them.
-          if (iter === 0) lastCollisionCount += 1;
+          // Count a collision only if these specific balls haven't "clacked" yet this frame
+          if (!collidedThisFrame.has(ballA.id) || !collidedThisFrame.has(ballB.id)) {
+            lastCollisionCount += 1;
+            collidedThisFrame.add(ballA.id);
+            collidedThisFrame.add(ballB.id);
+          }
         }
       }
     }
-
-    if (!anyImpulseThisIteration) break; // chain fully resolved, stop early
+    if (!anyImpulseThisIteration) break;
   }
 }
