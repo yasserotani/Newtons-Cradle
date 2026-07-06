@@ -2,23 +2,9 @@
 // Pure data storage. No physics math lives here — only ball creation/reset.
 
 import { CONFIG, computeCradleWidth } from "../constants.js";
-import { updateCartesianCoordinates } from "./motion.js";
+import { Ball } from "./Ball.js"; // Import the new Ball class
 
 export const pendulumBalls = [];
-
-// Removed the `environment` export ({ gravity, damping }) — nothing in the
-// files you shared imported it, gravity now lives solely on CONFIG.gravity,
-// and its `damping: 0.999` was a third, disconnected damping value on top
-// of PHYSICS.VISCOUS_K (the one actually used in motion.js). If some other
-// file you have imports `environment` from here, it'll now throw — worth a
-// quick search before dropping this in.
-//
-// Removed `updateBallMass(ballId, newMass)` too — also unreferenced in the
-// physics/UI/main files you shared. Mass changes currently flow through
-// main.js rebuilding CONFIG.masses and calling physics.reset(), which
-// rebuilds pendulumBalls from scratch via initPhysicsSystem() below — that
-// already fully covers mass updates, so this was a redundant, unused path
-// (mutating a ball's mass in place without a reset, which nothing called).
 
 /**
  * Builds the pendulumBalls array from scratch based on the LIVE CONFIG
@@ -43,21 +29,22 @@ export function initPhysicsSystem() {
     const pivotX = startX + i * spacing;
     const pivotY = CONFIG.supportHeight;
     const angle = 0; // Always start at angle 0, motion will be applied externally
+    const velocity = 0; // angular velocity (rad/s)
+    const radius = CONFIG.ballRadius;
+    const mass = CONFIG.masses?.[i] ?? 1;
+    const threadLength = CONFIG.threadLength;
 
-    const newBall = {
-      id: i,
+    const newBall = new Ball(
+      i,
       pivotX,
       pivotY,
       angle,
-      velocity: 0, // angular velocity (rad/s)
-      radius: CONFIG.ballRadius,
-      mass: CONFIG.masses?.[i] ?? 1,
-      x: 0, // Will be updated by updateCartesianCoordinates
-      y: 0, // Will be updated by updateCartesianCoordinates
-      held: false,
-    };
-    // Update Cartesian coordinates to reflect the initial angle (0)
-    updateCartesianCoordinates(newBall, CONFIG.threadLength);
+      velocity,
+      radius,
+      mass,
+      threadLength
+    );
+    // The Ball constructor already calls updateCartesianCoordinates
     pendulumBalls.push(newBall);
   }
 }
@@ -69,8 +56,8 @@ export function resetSystem() {
   pendulumBalls.forEach((ball) => {
     ball.angle = 0;
     ball.velocity = 0;
-    // Update Cartesian coordinates to reflect the reset angle (0)
-    updateCartesianCoordinates(ball, CONFIG.threadLength);
+    // Update Cartesian coordinates to reflect the reset angle (0) using the Ball's method
+    ball.updateCartesianCoordinates(CONFIG.threadLength);
     ball.held = false;
   });
 }

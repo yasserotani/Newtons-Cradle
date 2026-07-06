@@ -4,11 +4,12 @@
 // .getPositions() / .getStatus() / .reset() exactly as before.
 
 import {initPhysicsSystem, pendulumBalls, resetSystem} from "./state.js";
-import {getTotalSystemEnergy, updateAllPendulums, updateCartesianCoordinates,} from "./motion.js";
+import {getTotalSystemEnergy, updateAllPendulums} from "./motion.js"; // Removed updateCartesianCoordinates
 import {getLastCollisionCount, handleAllCollisions} from "./collision.js";
 import {CONFIG, PHYSICS} from "../constants.js";
 
 export class PhysicsEngine {
+  // Initializes the PhysicsEngine with a given configuration.
   constructor(config) {
     this.config = config;
     Object.assign(CONFIG, config); // keep constants.js's CONFIG in sync
@@ -18,6 +19,7 @@ export class PhysicsEngine {
     this.reset();
   }
 
+  // Resets the physics system to its initial state.
   reset() {
     Object.assign(CONFIG, this.config);
     initPhysicsSystem();
@@ -25,6 +27,7 @@ export class PhysicsEngine {
     this.lastEnergy = null;
   }
 
+  // Updates the physics simulation by a given time step.
   update(dt) {
     const safeDt = Math.min(Math.max(dt, 0), 0.03);
     // FIX: was a hardcoded `1 / 120` — now reads the single declared
@@ -43,35 +46,23 @@ export class PhysicsEngine {
     }
   }
 
+  // Returns the number of collisions that occurred in the last frame.
   getLastFrameCollisionCount() {
     return this.lastFrameCollisions ?? 0;
   }
 
-  // New method: sets pendulumBalls[index].held
+  // Sets the held state of a specific ball.
   setBallHeld(index, isHeld) {
     if (index >= 0 && index < pendulumBalls.length) {
-      pendulumBalls[index].held = isHeld;
-      if (isHeld) {
-        // When held, stop its motion
-        pendulumBalls[index].velocity = 0;
-      }
+      pendulumBalls[index].setHeld(isHeld);
     }
   }
 
-  // New method: clamps angle, sets ball's angle/velocity, updates Cartesian coords
+  // Sets the angle of a specific ball.
   setBallAngle(index, angle) {
     if (index >= 0 && index < pendulumBalls.length) {
       const ball = pendulumBalls[index];
-      // Clamp angle to a reasonable range to prevent visual glitches
-      const MAX_DRAG_ANGLE = 1.4; // Approximately 80 degrees
-      ball.angle = Math.max(
-          -MAX_DRAG_ANGLE,
-          Math.min(MAX_DRAG_ANGLE, angle),
-      );
-      ball.velocity = 0; // Held ball has no velocity
-
-      // Update Cartesian coordinates to reflect the new angle
-      updateCartesianCoordinates(ball, CONFIG.threadLength);
+      ball.setAngle(angle, CONFIG.threadLength);
     }
   }
 
@@ -91,27 +82,27 @@ export class PhysicsEngine {
     for (let i = 0; i < pendulumBalls.length; i++) {
       const ball = pendulumBalls[i];
       if (i < liftedBallCount) {
-        ball.angle = angleInRadians; // Use the converted angle
-        ball.velocity = 0; // Start from rest at the lifted angle
+        // Use setAngle method for consistency and internal coordinate update
+        ball.setAngle(angleInRadians, CONFIG.threadLength);
       } else {
-        ball.angle = 0;
-        ball.velocity = 0;
+        // Reset to 0 angle if not lifted
+        ball.setAngle(0, CONFIG.threadLength);
       }
-      // Update Cartesian coordinates for all balls to reflect their new angles
-      updateCartesianCoordinates(ball, CONFIG.threadLength);
+      // No need to call updateCartesianCoordinates explicitly here, as setAngle does it.
     }
   }
 
-  // Backward-compat: anything that still reads physics.balls directly
-  // (instead of getPositions()) will keep working.
+  // Returns the array of pendulum balls.
   get balls() {
     return pendulumBalls;
   }
 
+  // Returns the current Cartesian positions of all balls.
   getPositions() {
     return pendulumBalls.map((ball) => ({ x: ball.x, y: ball.y, z: 0 }));
   }
 
+  // Returns the current status of the physics engine, including energy, momentum, and ball states.
   getStatus() {
     const L = CONFIG.threadLength;
 

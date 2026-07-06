@@ -5,17 +5,19 @@
 
 import { pendulumBalls } from "./state.js";
 import { COLLISION, CONFIG } from "../constants.js";
-import { updateCartesianCoordinates } from "./motion.js";
+// Removed: import { updateCartesianCoordinates } from "./motion.js"; // This is now a Ball method
 
 const CORRECTION_PERCENT = 0.2; // Reverted to a more typical value
 const POSITION_SLOP = 0.01; // Reverted to a more typical value
 
 let lastCollisionCount = 0;
 
+// Returns the count of collisions that occurred in the last frame.
 export function getLastCollisionCount() {
   return lastCollisionCount;
 }
 
+// Calculates collision geometry (normal and overlap) between two balls.
 function getCollisionGeometry(ballA, ballB) {
   const dx = ballB.x - ballA.x;
   const dy = ballB.y - ballA.y;
@@ -37,6 +39,7 @@ function getCollisionGeometry(ballA, ballB) {
   return { normal: { x: nx, y: ny }, overlap };
 }
 
+// Converts a ball's angular velocity to its linear velocity.
 function getLinearVelocity(ball, L) {
   return {
     x: ball.velocity * L * Math.cos(ball.angle),
@@ -44,10 +47,12 @@ function getLinearVelocity(ball, L) {
   };
 }
 
+// Calculates the tangent vector for a ball's current angle.
 function getTangent(ball) {
   return { x: Math.cos(ball.angle), y: Math.sin(ball.angle) };
 }
 
+// Resolves an impulse between two colliding balls.
 function resolveImpulse(ballA, ballB, normal) {
   const L = CONFIG.threadLength;
   const e = CONFIG.restitution ?? 1.0;
@@ -80,6 +85,7 @@ function resolveImpulse(ballA, ballB, normal) {
   return true;
 }
 
+// Corrects the positions of two overlapping balls to prevent sinking.
 function correctPositions(ballA, ballB, normal, overlap) {
   const L = CONFIG.threadLength;
   const m1 = ballA.mass || 1;
@@ -101,8 +107,8 @@ function correctPositions(ballA, ballB, normal, overlap) {
   ballA.angle += (deltaA.x * tA.x + deltaA.y * tA.y) / L;
   ballB.angle += (deltaB.x * tB.x + deltaB.y * tB.y) / L;
 
-  updateCartesianCoordinates(ballA, L);
-  updateCartesianCoordinates(ballB, L);
+  ballA.updateCartesianCoordinates(L); // Use Ball's method
+  ballB.updateCartesianCoordinates(L); // Use Ball's method
 }
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-    // src/physics/motion.js
+// src/physics/motion.js
     // Pendulum swing physics: RK4 integration with air drag + viscous damping.
 
     import { pendulumBalls } from "./state.js";
@@ -7,10 +7,12 @@
     const RHO_AIR = 1.204;
     const CD = 0.47;
 
+    // Calculates the circular cross-sectional area of a ball.
     export function calculateCrossSection(radius) {
         return Math.PI * radius * radius;
     }
 
+    // Calculates the angular acceleration of a pendulum ball, considering gravity, viscous damping, and air drag.
     export function calculateAngularAcceleration(angle, omega, L, mass, radius, infiniteMotion) {
         const g = CONFIG.gravity; // FIX: was PHYSICS.GRAVITY, a frozen constant the gravity slider never touched
         const A = calculateCrossSection(radius);
@@ -28,6 +30,7 @@
         return gravityTerm + viscousTerm + airDragTerm;
     }
 
+    // Performs a single step of the Runge-Kutta 4th order integration for angular motion.
     function rk4Step(theta, omega, dt, L, mass, radius, infiniteMotion) {
         const f = (th, om) => calculateAngularAcceleration(th, om, L, mass, radius, infiniteMotion);
 
@@ -51,24 +54,25 @@
         return { newTheta, newOmega };
     }
 
-    export function updateCartesianCoordinates(ball, stringLength) {
-        ball.x = ball.pivotX + stringLength * Math.sin(ball.angle);
-        ball.y = ball.pivotY - stringLength * Math.cos(ball.angle);
-    }
+    // Removed export function updateCartesianCoordinates(ball, stringLength)
+    // This functionality is now a method of the Ball class.
 
     // ── Energy tracking (paper page 20: K = ½mv², U = mgL(1-cosθ), E = K+U) ──
     // v = ω·L (paper page 5, "الحركة الخطية والزاوية")
 
+    // Calculates the kinetic energy of a ball.
     export function calculateKineticEnergy(omega, L, mass) {
         const v = omega * L;
         return 0.5 * mass * v * v;
     }
 
+    // Calculates the potential energy of a ball.
     export function calculatePotentialEnergy(angle, L, mass) {
         const g = CONFIG.gravity; // FIX: was PHYSICS.GRAVITY
         return mass * g * L * (1 - Math.cos(angle));
     }
 
+    // Calculates the kinetic, potential, and total mechanical energy of a ball.
     export function calculateMechanicalEnergy(angle, omega, L, mass) {
         const K = calculateKineticEnergy(omega, L, mass);
         const U = calculatePotentialEnergy(angle, L, mass);
@@ -133,7 +137,7 @@
 
             // Always update Cartesian coordinates, even for held balls,
             // so their visual position matches their angle (set by drag handler)
-            updateCartesianCoordinates(ball, L);
+            ball.updateCartesianCoordinates(L); // Use the Ball's method
 
             // Store per-ball energy too, in case the UI wants to show it per-ball
             if (!ball.held) {
@@ -149,10 +153,10 @@
         });
     }
 
-    export function naturalFrequency(L) {
-        return Math.sqrt(CONFIG.gravity / L); // FIX: was PHYSICS.GRAVITY
-    }
-
-    export function periodOfOscillation(L) {
-        return 2 * Math.PI * Math.sqrt(L / CONFIG.gravity); // FIX: was PHYSICS.GRAVITY
-    }
+    // export function naturalFrequency(L) {
+    //     return Math.sqrt(CONFIG.gravity / L); // FIX: was PHYSICS.GRAVITY
+    // }
+    //
+    // export function periodOfOscillation(L) {
+    //     return 2 * Math.PI * Math.sqrt(L / CONFIG.gravity); // FIX: was PHYSICS.GRAVITY
+    // }
