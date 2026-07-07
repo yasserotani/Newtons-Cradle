@@ -1,4 +1,3 @@
-// src/physics/Ball.js
 
 export class Ball {
   // Initializes a new Ball instance with its physical properties and position.
@@ -6,17 +5,15 @@ export class Ball {
     this.id = id;
     this.pivotX = pivotX;
     this.pivotY = pivotY;
-    this.angle = angle; // angular position (radians)
-    this.velocity = velocity; // angular velocity (rad/s)
+    this.angle = angle;
+    this.velocity = velocity;
     this.radius = radius;
     this.mass = mass;
     this.held = false;
 
-    // Cartesian coordinates, will be updated by updateCartesianCoordinates
     this.x = 0;
     this.y = 0;
 
-    // Initial update of Cartesian coordinates
     this.updateCartesianCoordinates(threadLength);
   }
 
@@ -30,19 +27,18 @@ export class Ball {
   setHeld(isHeld) {
     this.held = isHeld;
     if (isHeld) {
-      this.velocity = 0; // Stop motion when held
+      this.velocity = 0;
     }
   }
 
   // Method to set the angle and stop motion
   setAngle(angle, threadLength) {
-    // Clamp angle to a reasonable range to prevent visual glitches
-    const MAX_DRAG_ANGLE = 1.4; // Approximately 80 degrees
+    const MAX_DRAG_ANGLE = 1.4;
     this.angle = Math.max(
         -MAX_DRAG_ANGLE,
         Math.min(MAX_DRAG_ANGLE, angle),
     );
-    this.velocity = 0; // Held ball has no velocity
+    this.velocity = 0;
     this.updateCartesianCoordinates(threadLength);
   }
 }

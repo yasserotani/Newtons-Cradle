@@ -1,23 +1,16 @@
-// src/physics/collision.js
-// Impulse-based collision resolution for pendulum balls constrained to
-// swing arcs. Adapted from a free-3D-vector model to work with this
-// project's angle/omega (angular velocity) state representation.
 
 import { pendulumBalls } from "./state.js";
 import { COLLISION, CONFIG } from "../constants.js";
-// Removed: import { updateCartesianCoordinates } from "./motion.js"; // This is now a Ball method
 
-const CORRECTION_PERCENT = 0.2; // Reverted to a more typical value
-const POSITION_SLOP = 0.01; // Reverted to a more typical value
+const CORRECTION_PERCENT = 0.2;
+const POSITION_SLOP = 0.01;
 
 let lastCollisionCount = 0;
 
-// Returns the count of collisions that occurred in the last frame.
 export function getLastCollisionCount() {
   return lastCollisionCount;
 }
 
-// Calculates collision geometry (normal and overlap) between two balls.
 function getCollisionGeometry(ballA, ballB) {
   const dx = ballB.x - ballA.x;
   const dy = ballB.y - ballA.y;
@@ -39,7 +32,6 @@ function getCollisionGeometry(ballA, ballB) {
   return { normal: { x: nx, y: ny }, overlap };
 }
 
-// Converts a ball's angular velocity to its linear velocity.
 function getLinearVelocity(ball, L) {
   return {
     x: ball.velocity * L * Math.cos(ball.angle),
@@ -47,12 +39,10 @@ function getLinearVelocity(ball, L) {
   };
 }
 
-// Calculates the tangent vector for a ball's current angle.
 function getTangent(ball) {
   return { x: Math.cos(ball.angle), y: Math.sin(ball.angle) };
 }
 
-// Resolves an impulse between two colliding balls.
 function resolveImpulse(ballA, ballB, normal) {
   const L = CONFIG.threadLength;
   const e = CONFIG.restitution ?? 1.0;
@@ -85,7 +75,6 @@ function resolveImpulse(ballA, ballB, normal) {
   return true;
 }
 
-// Corrects the positions of two overlapping balls to prevent sinking.
 function correctPositions(ballA, ballB, normal, overlap) {
   const L = CONFIG.threadLength;
   const m1 = ballA.mass || 1;
@@ -107,25 +96,11 @@ function correctPositions(ballA, ballB, normal, overlap) {
   ballA.angle += (deltaA.x * tA.x + deltaA.y * tA.y) / L;
   ballB.angle += (deltaB.x * tB.x + deltaB.y * tB.y) / L;
 
-  ballA.updateCartesianCoordinates(L); // Use Ball's method
-  ballB.updateCartesianCoordinates(L); // Use Ball's method
+  ballA.updateCartesianCoordinates(L);
+  ballB.updateCartesianCoordinates(L);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// 4. Public Entry Point
-//
-// FIX: previously did ONE left-to-right sweep through all pairs per
-// substep. A single sweep can't propagate an impulse through more than
-// one contact per call, so hitting a resting chain of 3+ balls spread the
-// momentum across the middle balls (visible twitching) instead of
-// transferring it cleanly to the end ball — even with restitution = 1,
-// since each individual impulse was elastic but the chain never finished
-// resolving before the next integration step ran.
-//
-// Now we sweep repeatedly within the same substep until nothing collides
-// anymore (or we hit the iteration cap), so a chain reaction fully
-// resolves before gravity/integration moves on.
-// ─────────────────────────────────────────────────────────────────────────
+
 export function handleAllCollisions() {
   lastCollisionCount = 0;
   const collidedThisFrame = new Set(); // Track unique balls
@@ -146,7 +121,6 @@ export function handleAllCollisions() {
 
         if (applied) {
           anyImpulseThisIteration = true;
-          // Count a collision only if these specific balls haven't "clacked" yet this frame
           if (!collidedThisFrame.has(ballA.id) || !collidedThisFrame.has(ballB.id)) {
             lastCollisionCount += 1;
             collidedThisFrame.add(ballA.id);

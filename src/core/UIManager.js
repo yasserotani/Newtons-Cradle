@@ -11,7 +11,7 @@ export class UIManager {
     this.dragController = dragController;
     this.resetCamera = resetCamera;
     this.onApplyInitialMotion = onApplyInitialMotion;
-    this.audioManager = audioManager; // Store AudioManager instance
+    this.audioManager = audioManager;
 
     this.panel = null;
     this.toggleButton = null;
@@ -19,10 +19,9 @@ export class UIManager {
     this.resetButton = null;
     this.visible = true;
     this.controllers = {};
-    this.massFolder = null; // New: Folder for individual mass controls
-    this.massControllers = []; // New: Array to store individual mass controllers
+    this.massFolder = null;
+    this.massControllers = [];
 
-    // Separate charts state
     this.velocityChart = null;
     this.momentumChart = null;
     this.energyChart = null;
@@ -33,17 +32,14 @@ export class UIManager {
     this.energyHistory = Array(this.historyLength).fill(0);
     this._previousRestitution = 1.0;
 
-    // per-ball "who's moving" bar chart state
     this.ballChart = null;
     this._ballChartCount = 0;
-    this.ballMoveThreshold = 0.02; // m/s — below this a ball counts as "at rest" for highlighting
+    this.ballMoveThreshold = 0.02;
   }
 
   createControls(params) {
-    // Initialize soundEnabled for the GUI params
     params.soundEnabled = this.audioManager ? this.audioManager.isEnabled() : true;
 
-    // Simulation Parameters Folder
     const simFolder = this.gui.addFolder("إعدادات المحاكاة");
 
     this.controllers.gravity = simFolder
@@ -96,20 +92,19 @@ export class UIManager {
         .name("عدد الكرات")
         .onChange((value) => {
           params.ballCount = value;
-          // Ensure masses array is correctly sized and filled with default if new balls are added
+
           while (params.masses.length < value) {
-            params.masses.push(10); // Default mass for new balls
+            params.masses.push(10);
           }
-          params.masses.length = value; // Trim if ballCount decreased
+          params.masses.length = value;
           this.onReset();
-          // Update max for liftedBallCount
           this.controllers.liftedBallCount.max(value);
           if (params.liftedBallCount > value) {
             params.liftedBallCount = value;
             this.controllers.liftedBallCount.setValue(value);
           }
           this.controllers.liftedBallCount.updateDisplay();
-          this._createIndividualMassControls(params); // Recreate mass controls
+          this._createIndividualMassControls(params);
         });
 
     this.controllers.ballRadius = simFolder
@@ -117,6 +112,14 @@ export class UIManager {
         .name("نصف قطر الكرة (m)")
         .onChange((value) => {
           params.ballRadius = value;
+          this.onReset();
+        });
+
+    this.controllers.threadLength = simFolder
+        .add(params, "threadLength", 0.5, 5.0, 0.01)
+        .name("طول الخيط (m)")
+        .onChange((value) => {
+          params.threadLength = value;
           this.onReset();
         });
 
@@ -134,15 +137,11 @@ export class UIManager {
           params.liftedBallCount = value;
         });
 
-    // New button to apply the chosen angle
     simFolder.add({ applyAngle: () => this.onApplyInitialMotion() }, 'applyAngle').name('تطبيق الزاوية والإطلاق');
 
-    simFolder.open(); // Open simulation parameters by default
-
-    // New: Create individual mass controls
+    simFolder.open();
     this._createIndividualMassControls(params);
 
-    // Display Options Folder
     const displayFolder = this.gui.addFolder("خيارات العرض");
     this.controllers.dragEnabled = displayFolder
         .add(params, "dragEnabled")
@@ -151,7 +150,6 @@ export class UIManager {
           this.dragController.setEnabled(value);
         });
 
-    // Sound toggle checkbox
     if (this.audioManager) {
       this.controllers.soundEnabled = displayFolder
           .add(params, "soundEnabled")
@@ -162,8 +160,7 @@ export class UIManager {
     }
     displayFolder.add({ resetCamera: () => this.resetCamera() }, 'resetCamera').name('إعادة ضبط الكاميرا');
 
-    displayFolder.open(); // Open display options by default
-
+    displayFolder.open();
     this.gui.add(params, "reset").name("إعادة تشغيل المحاكاة");
 
     this.createStatusPanel();
@@ -174,9 +171,8 @@ export class UIManager {
     this.dragController.setEnabled(params.dragEnabled);
   }
 
-  // New method to create/update individual mass controls
   _createIndividualMassControls(params) {
-    // Clear existing mass controllers and folder
+
     if (this.massFolder) {
       this.gui.removeFolder(this.massFolder);
     }
@@ -186,21 +182,19 @@ export class UIManager {
     this.massFolder.open();
 
     for (let i = 0; i < params.ballCount; i++) {
-      // Create a proxy object for each ball's mass to bind with lil-gui
-      // This is necessary because lil-gui binds to properties of an object, not directly to array elements.
+
       const ballMassProxy = {
-        mass: params.masses[i] !== undefined ? params.masses[i] : 10, // Use existing mass or default
+        mass: params.masses[i] !== undefined ? params.masses[i] : 10,
       };
 
-      // Update the actual masses array with the proxy's initial value if it was undefined
-      // This ensures params.masses is consistent with what the controller is displaying
+
       params.masses[i] = ballMassProxy.mass;
 
       const controller = this.massFolder
           .add(ballMassProxy, "mass", 0.5, 20, 0.1)
           .name(`الكرة ${i + 1}`)
           .onChange((value) => {
-            params.masses[i] = value; // Update the actual masses array
+            params.masses[i] = value;
             this.onReset();
           });
       this.massControllers.push(controller);
@@ -208,7 +202,6 @@ export class UIManager {
   }
 
   setControllerValues(values) {
-    // Update general controllers
     Object.entries(values).forEach(([key, value]) => {
       if (this.controllers[key]) {
         this.controllers[key].setValue(value);
@@ -232,23 +225,18 @@ export class UIManager {
       this.dragController.setEnabled(values.dragEnabled);
     }
 
-    // Handle ballCount changes and recreate mass controls
     if ('ballCount' in values) {
-      // Ensure params.masses is correctly sized and populated based on the new ballCount
-      // This is crucial before _createIndividualMassControls uses it.
+
       while (params.masses.length < values.ballCount) {
-        params.masses.push(10); // Default mass for new balls
+        params.masses.push(10);
       }
-      params.masses.length = values.ballCount; // Trim if ballCount decreased
-      // Now, copy the masses from 'values' (defaults) into the main 'params.masses'
+      params.masses.length = values.ballCount;
       for (let i = 0; i < values.ballCount; i++) {
         params.masses[i] = values.masses[i] !== undefined ? values.masses[i] : 10;
       }
 
-      // Recreate mass controls, binding them to the main 'params' object
       this._createIndividualMassControls(params);
 
-      // Update liftedBallCount max and value
       this.controllers.liftedBallCount.max(values.ballCount);
       if (values.liftedBallCount > values.ballCount) {
         values.liftedBallCount = values.ballCount;
@@ -574,6 +562,7 @@ export class UIManager {
         value: movingBalls.length ? movingBalls.join(", ") : "—",
         color: "#38bdf8",
       },
+      { label: "طول الخيط (m)", value: state.threadLength.toFixed(2), color: "#a78bfa" }, // Display threadLength
     ];
 
     ballAngles.forEach((angle, index) => {

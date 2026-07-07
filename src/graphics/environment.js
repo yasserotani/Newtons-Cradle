@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
-import { PMREMGenerator } from 'three';
 
 export function setupEnvironmentMap(scene, renderer) {
   const pmremGenerator = new THREE.PMREMGenerator(renderer);

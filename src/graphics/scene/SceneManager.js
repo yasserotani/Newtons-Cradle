@@ -1,6 +1,6 @@
 // src/graphics/scene/SceneManager.js
 import * as THREE from "three";
-import { setupEnvironmentMap } from "../environment/environment.js"; // Import the setupEnvironmentMap function
+import { setupEnvironmentMap } from "../environment.js"; // Import the setupEnvironmentMap function
 
 export class SceneManager {
   constructor() {
@@ -33,7 +33,7 @@ export class SceneManager {
     setupEnvironmentMap(this.scene, this.renderer);
 
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 20),
+      new THREE.PlaneGeometry(10, 10),
       new THREE.MeshStandardMaterial({
         color: 0x111827,
         metalness: 0.1,

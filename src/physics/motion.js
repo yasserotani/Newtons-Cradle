@@ -1,5 +1,3 @@
-// src/physics/motion.js
-    // Pendulum swing physics: RK4 integration with air drag + viscous damping.
 
     import { pendulumBalls } from "./state.js";
     import { PHYSICS, CONFIG } from "../constants.js";
@@ -54,9 +52,6 @@
         return { newTheta, newOmega };
     }
 
-    // Removed export function updateCartesianCoordinates(ball, stringLength)
-    // This functionality is now a method of the Ball class.
-
     // ── Energy tracking (paper page 20: K = ½mv², U = mgL(1-cosθ), E = K+U) ──
     // v = ω·L (paper page 5, "الحركة الخطية والزاوية")
 
@@ -79,17 +74,11 @@
         return { K, U, E: K + U };
     }
 
-    /**
-     * Sums kinetic, potential, and total mechanical energy across all balls
-     * right now. The split (not just the merged total) is useful because the
-     * paper's section 6 specifically describes K and U trading off against
-     * each other during a swing, while their sum E trends downward over time.
-     */
+
     export function getTotalSystemEnergy() {
         const L = CONFIG.threadLength;
         return pendulumBalls.reduce(
             (totals, ball) => {
-                // Skip energy calculation for held balls, as their state is externally controlled
                 if (ball.held) {
                     return totals;
                 }
@@ -108,16 +97,11 @@
         );
     }
 
-    /**
-     * Integrates every ball's swing by dt using RK4.
-     * Does NOT handle collisions — that's collision.js's job, called after this.
-     */
     export function updateAllPendulums(dt, infiniteMotion) {
         const L = CONFIG.threadLength;
 
         pendulumBalls.forEach((ball) => {
             if (!ball.held) {
-                // Only integrate if the ball is NOT held
                 const { newTheta, newOmega } = rk4Step(
                     ball.angle,
                     ball.velocity,
@@ -135,11 +119,9 @@
                 ball.velocity = 0;
             }
 
-            // Always update Cartesian coordinates, even for held balls,
-            // so their visual position matches their angle (set by drag handler)
-            ball.updateCartesianCoordinates(L); // Use the Ball's method
 
-            // Store per-ball energy too, in case the UI wants to show it per-ball
+            ball.updateCartesianCoordinates(L);
+
             if (!ball.held) {
                 const energy = calculateMechanicalEnergy(ball.angle, ball.velocity, L, ball.mass);
                 ball.kineticEnergy = energy.K;
@@ -152,11 +134,3 @@
             }
         });
     }
-
-    // export function naturalFrequency(L) {
-    //     return Math.sqrt(CONFIG.gravity / L); // FIX: was PHYSICS.GRAVITY
-    // }
-    //
-    // export function periodOfOscillation(L) {
-    //     return 2 * Math.PI * Math.sqrt(L / CONFIG.gravity); // FIX: was PHYSICS.GRAVITY
-    // }

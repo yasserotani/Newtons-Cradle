@@ -16,13 +16,4 @@ const renderer = sceneManager.getRenderer();
 const lightsManager = new LightsManager();
 lightsManager.addToScene(scene);
 
-// 3. بناء البندول وإضافته للمشهد - REMOVED from here
-// const cradleGroup = CradleBuilder.build(CONFIG);
-// scene.add(cradleGroup);
-
-// 4. تجهيز المُحدِّث - REMOVED from here
-// const updater = new CradleUpdater(cradleGroup);
-
-// 5. تصدير كل ما يحتاجه main.js
-// Export CradleBuilder and CradleUpdater classes directly
 export { scene, camera, renderer, CradleBuilder, CradleUpdater, PhysicsBridge };

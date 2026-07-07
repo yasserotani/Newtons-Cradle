@@ -1,4 +1,3 @@
-// src/main.js
 import {
   scene,
   camera,
@@ -13,14 +12,12 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PhysicsEngine } from "./physics/PhysicsEngine.js";
 import { TimeManager } from "./core/TimeManager.js";
 import { UIManager } from "./core/UIManager.js";
-import { AnimationController } from "./animation/AnimationController.js";
-import { StateSync } from "./animation/StateSync.js"; // Corrected import path
+import { StateSync, AnimationController } from "./animation/AnimationManager.js";
 import { AudioManager } from "./core/AudioManager.js";
 import { DragController } from "./interaction/DragController.js";
-import { KeyboardControls } from "./interaction/KeyboardControls.js"; // New import
+import { KeyboardControls } from "./interaction/KeyboardControls.js";
 
-// Deep copy of the initial CONFIG, taken before anything can mutate it —
-// this is the single source of truth for what "Reset Values" restores to.
+
 const ORIGINAL_CONFIG = JSON.parse(JSON.stringify(CONFIG));
 
 let activeCradleGroup = null;
@@ -69,7 +66,7 @@ const params = {
   ballRadius: physics.config.ballRadius,
   threadLength: physics.config.threadLength,
   supportHeight: physics.config.supportHeight,
-  masses: [...physics.config.masses], // Now an array for individual masses
+  masses: [...physics.config.masses],
   initialLaunchAngle: physics.config.initialLaunchAngle,
   liftedBallCount: physics.config.liftedBallCount,
   infiniteMotion: false,
@@ -82,7 +79,7 @@ const params = {
     physics.config.supportHeight = params.supportHeight;
     physics.config.initialLaunchAngle = params.initialLaunchAngle;
     physics.config.liftedBallCount = params.liftedBallCount;
-    physics.config.masses = [...params.masses]; // Update physics engine with individual masses
+    physics.config.masses = [...params.masses];
 
     physics.config.cradleWidth = computeCradleWidth(params);
     physics.config.spreadZ = physics.config.cradleWidth / 5;
@@ -95,7 +92,7 @@ const params = {
 
     physics.gravity = params.gravity;
     physics.infiniteMotion = params.infiniteMotion;
-    physics.reset(); // resets balls to angle 0, velocity 0
+    physics.reset();
     rebuildCradle();
     if (window.physicsBridge) {
       window.physicsBridge.updater = activeUpdater;
@@ -123,15 +120,13 @@ const onPauseToggle = () => {
   isPaused = !isPaused;
   if (isPaused) animationController?.stop();
   else animationController?.start();
-  // Update the pause button text in the UI
   uiManager.pauseButton.textContent = isPaused ? "Resume" : "Pause";
 };
 
 const uiManager = new UIManager(
     () => params.reset(),
-    onPauseToggle, // Pass the shared onPauseToggle function
+    onPauseToggle,
     () => {
-      // Restore every slider to ORIGINAL_CONFIG's values.
       const defaults = {
         gravity: ORIGINAL_CONFIG.gravity,
         restitution: ORIGINAL_CONFIG.restitution,
@@ -139,7 +134,7 @@ const uiManager = new UIManager(
         ballRadius: ORIGINAL_CONFIG.ballRadius,
         threadLength: ORIGINAL_CONFIG.threadLength,
         supportHeight: ORIGINAL_CONFIG.supportHeight,
-        masses: [...ORIGINAL_CONFIG.masses], // Restore masses array
+        masses: [...ORIGINAL_CONFIG.masses],
         initialLaunchAngle: ORIGINAL_CONFIG.initialLaunchAngle,
         liftedBallCount: ORIGINAL_CONFIG.liftedBallCount,
         infiniteMotion: false,
@@ -147,28 +142,19 @@ const uiManager = new UIManager(
       };
 
       Object.assign(params, defaults);
-      params.masses = [...defaults.masses]; // Explicitly update params.masses
-
+      params.masses = [...defaults.masses];
       uiManager.setControllerValues(defaults);
       params.reset();
 
-      // FIX: params.reset() alone only leaves every ball hanging straight
-      // down at rest — it never re-applies the default launch pose. Since
-      // the cradle looks identical at rest no matter what the underlying
-      // values are, this made "Reset Values" look like it did nothing
-      // even when every slider had, in fact, been restored correctly.
-      // Re-applying the default launch state here makes the reset
-      // visually obvious.
       applyInitialMotion();
     },
     dragController,
     resetCamera,
     applyInitialMotion,
-    audioManager // Pass audioManager here
+    audioManager
 );
 uiManager.createControls(params);
 
-// Instantiate KeyboardControls
 new KeyboardControls(onPauseToggle);
 
 const stateSync = new StateSync(physicsBridge, physics);
@@ -182,15 +168,16 @@ animationController = new AnimationController(() => {
     energyTransfer: 0,
     activeBall: 0,
     ballVelocities: [],
-    ballAngles: [], // Ensure ballAngles is initialized
+    ballAngles: [],
   };
   status.gravity = physics.config.gravity;
   status.restitution = physics.config.restitution;
   status.ballCount = physics.config.ballCount;
   status.ballRadius = physics.config.ballRadius;
-  // Removed status.mass as it's no longer a single value
+  status.threadLength = physics.config.threadLength;
+
   status.initialLaunchAngle = physics.config.initialLaunchAngle;
-  status.liftedBallCount = physics.config.liftedBallCount; // FIX: was self-assigned (status.liftedBallCount = status.liftedBallCount), a no-op that always showed undefined
+  status.liftedBallCount = physics.config.liftedBallCount;
   uiManager.updateStatus(status);
   controls.update();
   renderer.render(scene, camera);
